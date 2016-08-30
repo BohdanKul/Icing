@@ -6,69 +6,8 @@
 
 using namespace std;
 
-/****************************************************************************************************
- * Given a vector of cluster indices associated with spins as well as a vector of spin pairs attached 
- * by the boundary, the function  counts how many clusters exist on the boundary for such a connection.
- ***************************************************************************************************/
-int MergeClusters(vector<int>& Cluster_Partition, vector<pair<int, int>>& Boundary){
-     int bclus; int uclus;
-
-     vector< set<int> > MergedClusters; 
-     bool new_merge;
-     
-     for (auto Spin_Pair=Boundary.begin(); Spin_Pair!=Boundary.end(); Spin_Pair++){
-         bclus = Cluster_Partition[ Spin_Pair->first  ];
-         uclus = Cluster_Partition[ Spin_Pair->second ];
-         
-         if (bclus != uclus){
-             new_merge = true;
-             
-             for (auto mcluster = MergedClusters.begin(); mcluster != MergedClusters.end(); mcluster++){
-                 if (mcluster->find(bclus) != mcluster->end()){
-                     mcluster->insert(uclus); 
-                     new_merge = false;
-                     break;
-                 }
-                 if (mcluster->find(uclus) != mcluster->end()){
-                     mcluster->insert(bclus); 
-                     new_merge = false;
-                     break;
-                 }
-             }
-             
-             if (new_merge){
-                set<int> tset;
-                tset.insert(bclus);
-                tset.insert(uclus);
-                MergedClusters.push_back(tset); 
-             }
-        }
-    }
-    
-    return MergedClusters.size();
-}
 
 
-/****************************************************************************************************
- * A recursive function that traces a cluster for a given simulation cell. The result is stored in 
- * the Cluster_Partition vector which should be initiated to -1. There is an option to flip the cluster
- * controlled with the bool variable toFlip.
- ***************************************************************************************************/
-void TraceCluster(SimulationCell& SC, vector<int>& Cluster_Partition, int ncluster, int nspin, bool toFlip){
-    
-    Cluster_Partition[nspin] = ncluster;
-    
-    if (toFlip)
-        SC.GetSpins().Flip(nspin);
-
-    for (auto nghb  = SC.GetLattice().at(nspin).begin(); 
-              nghb != SC.GetLattice().at(nspin).end(); 
-              nghb++){
-        if  (Cluster_Partition[*nghb] == -1){
-            TraceCluster(SC, Cluster_Partition, ncluster, *nghb, toFlip); 
-        }
-    }
-}
 
 
 /****************************************************************************************************
@@ -84,4 +23,20 @@ int GetEffectiveField(SimulationCell& SC, int ispin){
     return field;  
 }
 
+/****************************************************************************************************
+* get the total energy (up to J constant)
+ ****************************************************************************************************/
+int GetEnergy(SimulationCell& SC){
+    int energy = 0; 
+
+    int istate = 0;
+    for (int ispin=0; ispin!=SC.GetSize(); ispin++){
+        istate = SC.GetSpins().Get(ispin);
+        for (auto jspin =SC.GetLattice().at(ispin).begin(); 
+                  jspin!=SC.GetLattice().at(ispin).end(); 
+                  jspin++)
+            energy += istate*SC.GetSpins().Get(*jspin);
+    } 
+    return (int) energy/2; // divide by 2 to compensate for the double counting  
+}
 #endif

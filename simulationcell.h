@@ -29,11 +29,14 @@ class SimulationCell{
         
         vector<vector<int>> nghbs;       // for each index, the vector keeps track of the neighbours
 
+        void Init(int _width, int _height, Spins* _spins, vector<int> & _A);
+
         int  GetFlatCrd(int _r, int _sindex){ // get the index of a spin located at _sindex of replica r
             return _r*rep_N + _sindex;         
         }
 
     public:
+        SimulationCell(int _width, int _height, Spins* _spins);
         SimulationCell(int _width, int _height, Spins* _spins, vector<int>& _A);
        
         Spins& GetSpins(){                     // get access to the spins  
@@ -77,12 +80,28 @@ class SimulationCell{
 };
 
 /****************************************************************************************************
+ *
+ ***************************************************************************************************/
+SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<int>& _A){
+    Init(_width, _height, _spins, _A);
+}
+
+/****************************************************************************************************
+ *
+ ***************************************************************************************************/
+SimulationCell::SimulationCell(int _width, int _height, Spins* _spins){
+    vector<int> A;
+    A.clear();
+    Init(_width, _height, _spins, A);
+}
+
+/****************************************************************************************************
  * Initialize the spins state object and build a rectangular lattice connectivity data structures 
  * required to run cluster and normal spin updates on the simulation cell. The region A determines
  * the spins connectivity at the boundary between two replicas constituing the lattice.
  ***************************************************************************************************/
-SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<int>& _A){
-    
+void SimulationCell::Init(int _width, int _height, Spins* _spins, vector<int>& _A){
+
     spins = _spins;
     
     width  = _width;
@@ -93,7 +112,7 @@ SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<in
     rep_height = (int) height/2;
     rep_N = rep_width*rep_height;
 
-    
+  
     // initialize two replicas that are not connected to 
     // each other at first. Those are temporary data structures
     // helping to build the full lattice.
@@ -102,8 +121,8 @@ SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<in
     replicas.push_back(Rectangle(1, rep_width, rep_height, false)); 
     r=2;
    
-    replicas[0].print();
-    replicas[1].print();
+    //replicas[0].print();
+    //replicas[1].print();
    
     int bspin1; int tspin1;
     int bspin2; int tspin2;
@@ -114,7 +133,7 @@ SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<in
         // determine the boundary spins that need to get rewired 
         bspin1 = replicas[0].GetBoundary().at(i).first;
         tspin1 = replicas[0].GetBoundary().at(i).second;
-        cout << bspin1 << "," << tspin1 << endl; 
+        //cout << bspin1 << "," << tspin1 << endl; 
 
         bspin2 = replicas[1].GetBoundary().at(i).first;
         tspin2 = replicas[1].GetBoundary().at(i).second;
@@ -142,10 +161,10 @@ SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<in
         }
     }
 
-    replicas[0].print();
-    replicas[1].print();
+    //replicas[0].print();
+    //replicas[1].print();
     
-    cout << endl << "--- Milestone 2: " << " about to build the boundary" << endl; 
+    //cout << endl << "--- Milestone 2: " << " about to build the boundary" << endl; 
     // store all the connectivity information into a flat vector
     for (auto _r=0; _r!=r; _r++){
         for (auto _s=0; _s!=rep_N; _s++){
@@ -160,13 +179,10 @@ SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<in
 
     // At this point, the informaion contained in the replicas is redundant.
     // Destroy them.
-    cout << endl << "--- Milestone 3: " << " done building the boundary" << endl; 
+    //cout << endl << "--- Milestone 3: " << " done building the boundary" << endl; 
     replicas.clear();
-}
 
-/****************************************************************************************************
- *
- ***************************************************************************************************/
+}
 
 
 #endif
