@@ -13,7 +13,7 @@ using namespace std;
 class Communicator
 {
     public:
-        Communicator(int _r, int _width, int _height, float _beta, long _p);
+        Communicator(int _r, int _width, int _height, int _widthA, int _widthAp, float _beta, long _p);
         fstream* stream(string _fileName); 
         long     getId(){return id;};
 
