@@ -17,14 +17,14 @@ using namespace std;
 
 class ClusterBuilder{
     protected:
-        float P;
+        double P;
         int signJ ;
         SimulationCell& SC;
         vector<int> Cluster_Partition;
-        boost::variate_generator<boost::mt19937&, boost::uniform_real<float>>& RealRnd;
+        boost::variate_generator<boost::mt19937&, boost::uniform_real<double>>& RealRnd;
     public:
-        ClusterBuilder(SimulationCell& _SC, float _beta, int _signJ, 
-                       boost::variate_generator<boost::mt19937&, boost::uniform_real<float> >& _RealRnd);
+        ClusterBuilder(SimulationCell& _SC, double _beta, int _signJ, 
+                       boost::variate_generator<boost::mt19937&, boost::uniform_real<double> >& _RealRnd);
 
         void ResetPartition();
             
@@ -35,8 +35,8 @@ class ClusterBuilder{
 
 /****************************************************************************************************
  ***************************************************************************************************/
-ClusterBuilder::ClusterBuilder(SimulationCell& _SC, float _beta, int _signJ, 
-                      boost::variate_generator<boost::mt19937&, boost::uniform_real<float> >& _RealRnd):
+ClusterBuilder::ClusterBuilder(SimulationCell& _SC, double _beta, int _signJ, 
+                      boost::variate_generator<boost::mt19937&, boost::uniform_real<double> >& _RealRnd):
     RealRnd(_RealRnd),
     SC(_SC)
     {
