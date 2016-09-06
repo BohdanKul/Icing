@@ -62,6 +62,14 @@ int main(int argc, char *argv[]){
     }
 
     // seed
+    int Nmeas = 1;
+    if (params.count("meas"))
+        Nmeas = params["meas"].as<int>();
+
+    // seed
+    int binSize = params["binsize"].as<int>();
+
+    // seed
     long seed = 1;
     if (params.count("seed"))
         seed = params["seed"].as<long>();
@@ -193,8 +201,6 @@ int main(int argc, char *argv[]){
     int spinA; 
     int EF;
     double debug = false;
-    int Nmeas = 1000;
-    int binSize  = 1000;
     long  ET;
     double ZR ;
     double RN=0;
