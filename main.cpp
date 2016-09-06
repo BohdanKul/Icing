@@ -32,7 +32,7 @@ int main(int argc, char *argv[]){
     SimulationOptions.add_options()
         ("help,h",  "produce help message")
         ("seed, s", po::value<long>()->default_value(0),   "random generator seed")
-        ("meas, m",                                        "number of measurements (bins) to take")
+        ("meas, m", po::value<int>(),                      "number of measurements (bins) to take")
         ("binsize", po::value<int>()->default_value(100),  "number of MC sweeps per bin")
         ;
     
@@ -62,8 +62,12 @@ int main(int argc, char *argv[]){
     }
 
     // seed
-    int Nmeas = 1;
-    if (params.count("meas"))
+    int Nmeas;
+    if (not(params.count("meas"))){
+        cerr << "Error: define the number of bins to take (meas)" << endl;
+        return 1;
+    }
+    else
         Nmeas = params["meas"].as<int>();
 
     // seed
