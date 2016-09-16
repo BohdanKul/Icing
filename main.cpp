@@ -188,14 +188,15 @@ int main(int argc, char *argv[]){
 
     // Initialize the cluster builders -------------------
     ClusterBuilder CB( SC,  beta, signJ, RandReal); // one for a MC cluster update
-    ClusterBuilder CBF(SCF, beta, signJ, RandReal); // and one for the EE estimator
+    //ClusterBuilder CBF(SCF, beta, signJ, RandReal); // and one for the EE estimator
+    ClusterBuilder CBP(SCP, beta, signJ, RandReal); // 
     
 
     
     // Initialize file objects ----------------------------------------------------------
     Communicator communicator(reps, width, height, A_size, Ap_size, beta, seed);
     string eHeader = "";
-    eHeader += boo::str(boo::format("#%15s%16s")%"ET/N"%"Z_Ap/Z_A"); 
+    eHeader += boo::str(boo::format("#%15s%16s%16s")%"ET/N"%"Z_Ap/Z_A"%"Z_Ap/Z_A2"); 
     *communicator.stream("estimator")<< eHeader << endl; 
     long ID = communicator.getId();
 
@@ -206,11 +207,12 @@ int main(int argc, char *argv[]){
     int EF;
     double debug = false;
     long  ET;
-    double ZR ;
+    double ZR;
+    double ZR2;
     double RN=0;
-    int cn=0; int CNA; int CNP;
+    int CNA; int CNP;
     for (auto i=0; i!=Nmeas; i++){
-        ET = 0; ZR = 0;
+        ET = 0; ZR = 0; ZR2 = 0;
         for (auto j=0; j!=binSize; j++){
             if (debug) cout << "--- " << i << " " << j << endl;
             
@@ -248,21 +250,35 @@ int main(int argc, char *argv[]){
             ET += GetEnergy(SC);
             ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP) - GetBoundaryEnergy(SC)));
             
-            //cn = 0;
-            //CBF.ResetPartition();
-            //for (auto bpair = SCF.GetBoundary().begin();
-            //          bpair!= SCF.GetBoundary().end();
-            //          bpair++){
-            //    if (CBF.TraceCluster(cn, bpair->first,  false)) cn += 1; 
-            //    if (CBF.TraceCluster(cn, bpair->second, false)) cn += 1;
-            //}
+            CB.ResetPartition();
+            for (auto bpair = SC.GetBoundary().begin();
+                      bpair!= SC.GetBoundary().end();
+                      bpair++){
+                CB.TraceCluster(bpair->first,  false); 
+                CB.TraceCluster(bpair->second, false);
+            }
+            CNA = CB.GetClustersN();
+
+            CBP.ResetPartition();
+            for (auto bpair = SCP.GetBoundary().begin();
+                      bpair!= SCP.GetBoundary().end();
+                      bpair++){
+                CBP.TraceCluster(bpair->first,  false); 
+                CBP.TraceCluster(bpair->second, false);
+            }
+
+            CNP = CBP.GetClustersN();
+            
             //CNA = CBF.MergeClusters( SC.GetBoundary());
+            //cout << "Alternative: " <<  CBF.MergeClusters2( SC.GetBoundary()) << endl;
             //CNP = CBF.MergeClusters(SCP.GetBoundary());
-            //ZR += pow(2, CNP-CNA);
+            //cout << "Alternative: " <<  CBF.MergeClusters2( SCP.GetBoundary()) << endl;
+            ZR2 += pow(2, CNP-CNA);
         }
         
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(signJ*ET/(1.0*binSize*N)));
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR/(1.0*binSize)));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR /(1.0*binSize)));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR2/(1.0*binSize)));
         *communicator.stream("estimator") << endl;    
         
         cout << ID << ": Measurement taken" << endl;
