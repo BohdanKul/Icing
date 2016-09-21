@@ -148,7 +148,7 @@ int main(int argc, char *argv[]){
 
     boo::mt19937 engine(seed);
     boo::uniform_int<uint64_t> UDInt(0, N-1); 
-    boo::uniform_real<double>   UDReal(0,1);
+    boo::uniform_real<double>  UDReal(0,1);
     boo::variate_generator<boo::mt19937&, boo::uniform_int<uint64_t> > RandInt( engine, UDInt );
     boo::variate_generator<boo::mt19937&, boo::uniform_real<double> >   RandReal(engine, UDReal);
     
@@ -161,35 +161,26 @@ int main(int argc, char *argv[]){
     //spins.print();
 
     
-    // Initialize region A --------------------------------------------------------------
+    // Initialize region A and A', dA = A - A' (A' is always assummed to be larger)
     vector<int> A;
-    A.clear();
-    for (auto i=0; i!=A_size; i++)
-        A.push_back(i);
-    
-    // Initialize the simulation cell ---------------------------------------------------
+    vector<int> Ap;
+    vector<int> dA;
+    A.clear(); Ap.clear(); dA.clear();
+    for (auto i=0;      i!=A_size;  i++) A.push_back(i);
+    for (auto i=0;      i!=Ap_size; i++) Ap.push_back(i);
+    for (auto i=A_size; i!=Ap_size; i++) dA.push_back(i);
+   
+     
+    // Initialize the main simulation cell corresponding to the region A --------------------
     SimulationCell SC(width, height, &spins, A);
     //SC.print();
-    
-
-    // Initialize helper objects required to calculate the partition function. Those are simulation 
-    // cells corresponding to the region A' and emty and region A. 
-    vector<int> Ap;
-    Ap.clear();
-    for (auto i=0; i!=Ap_size; i++)
-        Ap.push_back(i);
-    
    
+    // Also initilize the simulation cell based on the region A'. It is used as a A'-BCs builder
     SimulationCell SCP(width, height, &spins, Ap);
     //SCP.print();
     
-    SimulationCell SCF(width, height, &spins);
-    //SCF.print();
-
     // Initialize the cluster builders -------------------
-    ClusterBuilder CB( SC,  beta, signJ, RandReal); // one for a MC cluster update
-    //ClusterBuilder CBF(SCF, beta, signJ, RandReal); // and one for the EE estimator
-    ClusterBuilder CBP(SCP, beta, signJ, RandReal); // 
+    ClusterBuilder CB(SC, SCP,  beta, signJ, RandReal); 
     
 
     
@@ -210,7 +201,6 @@ int main(int argc, char *argv[]){
     double ZR;
     double ZR2;
     double RN=0;
-    int CNA; int CNP;
     for (auto i=0; i!=Nmeas; i++){
         ET = 0; ZR = 0; ZR2 = 0;
         for (auto j=0; j!=binSize; j++){
@@ -221,8 +211,15 @@ int main(int argc, char *argv[]){
             // perform a Wolff cluster update
             
             initSpin = RandInt() ; // pick randomly the initial spin
+           
             CB.ResetPartition();
-            CB.TraceCluster(0, initSpin, true);
+            CB.FlipTraceCluster(0, initSpin);
+            //int t=0;
+            //for (auto s=CB.GetPartition().begin(); s!=CB.GetPartition().end(); s++){
+            //    if (*s != -1)
+            //        SC.GetSpins().Flip(t);
+            //    t += 1;
+            //}
 
             if (debug){
                 cout << "    cluster is flipped " << endl; //<< Cluster << endl << "    ";
@@ -236,7 +233,6 @@ int main(int argc, char *argv[]){
                 spinA = SC.GetSpins().Get(ispin);
                 
                 RN = RandReal();
-                //cout << "Spins #" << ispin << " = " << spinA << " field: " << EF << " sign: " << signJ << " RN = " << RN << " index: " << (int) abs(EF)/2 << endl; 
                 if  (spinA*signJ*EF>0)
                     SC.GetSpins().Flip(ispin);   
                 else{
@@ -244,36 +240,46 @@ int main(int argc, char *argv[]){
                         SC.GetSpins().Flip(ispin);
                     }
             }
-            //SC.GetSpins().print();
 
             // Perform measurements --------------------------------------------------------
             ET += GetEnergy(SC);
-            ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP) - GetBoundaryEnergy(SC)));
+            //ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP) - GetBoundaryEnergy(SC)));
             
+            ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP, dA) - GetBoundaryEnergy(SC, dA)));
+            
+            int bspin1; int bspin2;
+            int tspin1; int tspin2;
+            int NCA = 0;
             CB.ResetPartition();
-            for (auto bpair = SC.GetBoundary().begin();
-                      bpair!= SC.GetBoundary().end();
-                      bpair++){
-                CB.TraceCluster(bpair->first,  false); 
-                CB.TraceCluster(bpair->second, false);
+            CB.ResetLinks();
+            for (auto k=dA.begin(); k!=dA.end(); k++){
+                bspin1 = SC.GetBoundary()[2*(*k)  ].first; 
+                tspin1 = SC.GetBoundary()[2*(*k)  ].second;
+                bspin2 = SC.GetBoundary()[2*(*k)+1].first; 
+                tspin2 = SC.GetBoundary()[2*(*k)+1].second;
+                
+                if (CB.CrumbTraceCluster(NCA, bspin1)==true) NCA +=1; 
+                if (CB.CrumbTraceCluster(NCA, tspin1)==true) NCA +=1;
+                if (CB.CrumbTraceCluster(NCA, bspin2)==true) NCA +=1; 
+                if (CB.CrumbTraceCluster(NCA, tspin2)==true) NCA +=1;
             }
-            CNA = CB.GetClustersN();
+            CB.ReconnectLinks(dA);
+            CB.ResetPartition();
 
-            CBP.ResetPartition();
-            for (auto bpair = SCP.GetBoundary().begin();
-                      bpair!= SCP.GetBoundary().end();
-                      bpair++){
-                CBP.TraceCluster(bpair->first,  false); 
-                CBP.TraceCluster(bpair->second, false);
+            int NCP = 0;
+            for (auto k=dA.begin(); k!=dA.end(); k++){
+                bspin1 = SCP.GetBoundary()[2*(*k)  ].first; 
+                tspin1 = SCP.GetBoundary()[2*(*k)  ].second;
+                bspin2 = SCP.GetBoundary()[2*(*k)+1].first; 
+                tspin2 = SCP.GetBoundary()[2*(*k)+1].second;
+                
+                if (CB.EatCrumbs(NCP, bspin1)==true) NCP +=1; 
+                if (CB.EatCrumbs(NCP, tspin1)==true) NCP +=1;
+                if (CB.EatCrumbs(NCP, bspin2)==true) NCP +=1; 
+                if (CB.EatCrumbs(NCP, tspin2)==true) NCP +=1;
             }
 
-            CNP = CBP.GetClustersN();
-            
-            //CNA = CBF.MergeClusters( SC.GetBoundary());
-            //cout << "Alternative: " <<  CBF.MergeClusters2( SC.GetBoundary()) << endl;
-            //CNP = CBF.MergeClusters(SCP.GetBoundary());
-            //cout << "Alternative: " <<  CBF.MergeClusters2( SCP.GetBoundary()) << endl;
-            ZR2 += pow(2, CNP-CNA);
+            ZR2 += pow(2, NCP-NCA);
         }
         
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(signJ*ET/(1.0*binSize*N)));
