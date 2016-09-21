@@ -44,11 +44,26 @@ int GetEnergy(SimulationCell& SC){
  ****************************************************************************************************/
 int GetBoundaryEnergy(SimulationCell& SC){
     int E = 0;
-    for (auto bp =SC.GetBoundary().begin(); 
-              bp!=SC.GetBoundary().end(); 
-              bp++)
+    for (auto bp =SC.GetBoundary().begin(); bp!=SC.GetBoundary().end(); bp++){
         E += SC.GetSpins().Get(bp->first) * SC.GetSpins().Get(bp->second);
-
+    }
     return E;
 }
+
+/****************************************************************************************************
+* Get the boundary energy limited to the region A (up to J constant)
+ ****************************************************************************************************/
+int GetBoundaryEnergy(SimulationCell& SC, vector<int>& dA){
+    int E = 0;
+    pair<int, int>* bp;
+    for (auto i=dA.begin(); i!=dA.end(); i++){
+        bp = &(SC.GetBoundary()[2*(*i)]);
+        E += SC.GetSpins().Get(bp->first) * SC.GetSpins().Get(bp->second);
+        
+        bp = &(SC.GetBoundary()[2*(*i)+1]);
+        E += SC.GetSpins().Get(bp->first) * SC.GetSpins().Get(bp->second);
+    }
+    return E;
+}
+
 #endif
