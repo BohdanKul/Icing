@@ -55,28 +55,7 @@ class SimulationCell{
             return boundary;
         };
 
-        // ugly but useful debugging routines
-        void print(){
-            cout << endl << "--- Simulation cell state ---" << endl;
-            cout << endl << "    r: " << r << " width: " << width << " height: " << height << endl; 
-            cout << endl << "   Spins state:" << endl << "   ";
-            spins->print();
-            
-            cout << endl << "   Neighbours state: " << endl;
-            for (int i=0; i!=N; i++){
-                cout << "   " << setfill(' ') << setw(2) << i << ": ";
-                for (auto nghb=nghbs[i].begin(); nghb!=nghbs[i].end(); nghb++)
-                    cout << setfill(' ') << setw(2) << *nghb << " ";
-                cout << endl;
-            }
-            cout << endl;
-            
-            cout << "   Boundary state: " << endl << "   ";
-            for (auto b=boundary.begin(); b!=boundary.end(); b++)
-                cout << "("<< b->first << ", " << b->second << ") ";
-            cout << endl;
-        };
-
+        void print();    // ugly but useful debugging routines
 };
 
 /****************************************************************************************************
@@ -141,23 +120,24 @@ void SimulationCell::Init(int _width, int _height, Spins* _spins, vector<int>& _
 
         // if the spins aren't part of region A, link them intra-replicas
         if (find(_A.begin(), _A.end(), bspin1)==_A.end()) {
-            replicas[0].GetUnitCell(bspin1).ResetNghb('b', Crd(0, tspin1));
-            replicas[0].GetUnitCell(tspin1).ResetNghb('t', Crd(0, bspin1));
-            replicas[1].GetUnitCell(bspin2).ResetNghb('b', Crd(1, tspin2));
-            replicas[1].GetUnitCell(tspin2).ResetNghb('t', Crd(1, bspin2));
+            replicas[0].GetUnitCell(bspin1).SetNghb('d', Crd(0, tspin1));
+            replicas[0].GetUnitCell(tspin1).SetNghb('u', Crd(0, bspin1));
+            replicas[1].GetUnitCell(bspin2).SetNghb('d', Crd(1, tspin2));
+            replicas[1].GetUnitCell(tspin2).SetNghb('u', Crd(1, bspin2));
 
             boundary.push_back(make_pair(GetFlatCrd(0, bspin1), GetFlatCrd(0, tspin1)));
             boundary.push_back(make_pair(GetFlatCrd(1, bspin2), GetFlatCrd(1, tspin2)));
+            
         }
         // otherwise, an inter-replicas links are created
         else{
-            replicas[0].GetUnitCell(bspin1).ResetNghb('b', Crd(1, tspin2));
-            replicas[0].GetUnitCell(tspin1).ResetNghb('t', Crd(1, bspin2));
-            replicas[1].GetUnitCell(bspin2).ResetNghb('b', Crd(0, tspin1));
-            replicas[1].GetUnitCell(tspin2).ResetNghb('t', Crd(0, bspin1));
+            replicas[0].GetUnitCell(bspin1).SetNghb('d', Crd(1, tspin2));
+            replicas[0].GetUnitCell(tspin1).SetNghb('u', Crd(1, bspin2));
+            replicas[1].GetUnitCell(bspin2).SetNghb('d', Crd(0, tspin1));
+            replicas[1].GetUnitCell(tspin2).SetNghb('u', Crd(0, bspin1));
          
             boundary.push_back(make_pair(GetFlatCrd(0, bspin1), GetFlatCrd(1, tspin2)));
-            boundary.push_back(make_pair(GetFlatCrd(0, tspin1), GetFlatCrd(1, bspin2)));
+            boundary.push_back(make_pair(GetFlatCrd(1, bspin2), GetFlatCrd(0, tspin1)));
         }
     }
 
@@ -183,6 +163,30 @@ void SimulationCell::Init(int _width, int _height, Spins* _spins, vector<int>& _
     replicas.clear();
 
 }
+
+/****************************************************************************************************
+ * Print the main data structures of the class. Useful for debugging purposes. 
+ ***************************************************************************************************/
+void SimulationCell::print(){
+    cout << endl << "--- Simulation cell state ---" << endl;
+    cout << endl << "    r: " << r << " width: " << width << " height: " << height << endl; 
+    cout << endl << "   Spins state:" << endl << "   ";
+    spins->print();
+    
+    cout << endl << "   Neighbours state: " << endl;
+    for (int i=0; i!=N; i++){
+        cout << "   " << setfill(' ') << setw(2) << i << ": ";
+        for (auto nghb=nghbs[i].begin(); nghb!=nghbs[i].end(); nghb++)
+            cout << setfill(' ') << setw(2) << *nghb << " ";
+        cout << endl;
+    }
+    cout << endl;
+    
+    cout << "   Boundary state: " << endl << "   ";
+    for (auto b=boundary.begin(); b!=boundary.end(); b++)
+        cout << "("<< b->first << ", " << b->second << ") ";
+    cout << endl;
+};
 
 
 #endif
