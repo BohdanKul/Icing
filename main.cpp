@@ -38,14 +38,15 @@ int main(int argc, char *argv[]){
     
     po::options_description PhysicalOptions("Physical options");
     PhysicalOptions.add_options()
-        ("beta,   b",         po::value<double>()->default_value(beta_c),  
-                                                  "inverse temperature")
-        ("signJ,  J",         po::value<int>()->default_value(1),   
-                                                  "ferromagnetic (+1) or antiferromagnetic (-1) coupling")
-        ("width,  w",         po::value<int>(),   "lattice width")
-        ("height, h",         po::value<int>(),   "lattice height")
-        ("A, A",              po::value<int>(),   "region A widht")
-        ("Ap, P",             po::value<int>(),   "region A prime width")
+        ("beta,   b", po::value<double>()->default_value(beta_c),  "inverse temperature")
+        ("signJ,  J", po::value<int>()->default_value(-1),         "ferromagnetic (-1) or antiferromagnetic (+1) coupling")
+        ("X, X",      po::value<int>(),                            "lattice X")
+        ("Y, Y",      po::value<int>(),                            "lattice Y")
+        ("Z, Z",      po::value<int>(),                            "lattice Z") 
+        ("Ax",        po::value<int>(),                            "region A width")
+        ("Ay",        po::value<int>()->default_value(1),          "region A height")
+        ("APx",       po::value<int>(),                            "region A prime width")
+        ("APy",       po::value<int>()->default_value(1),          "region A prime height")
         ;
 
     po::options_description cmdLineOptions("Command line options");
@@ -105,49 +106,47 @@ int main(int argc, char *argv[]){
     }
 
     // lattice
-    int width;
-    int height;
-    if (not(params.count("width")) or not(params.count("height"))){
-        cerr << "Error: define lattice dimensions (width, height)" << endl;
+    int X;
+    int Y;
+    int Z;
+
+    if (not(params.count("X")) or not(params.count("Y")) or not(params.count("Z"))){
+        cerr << "Error: define lattice dimensions (X, Y, Z)" << endl;
         return 1;
     }
     else{
-        width  = params["width"].as<int>();
-        height = params["height"].as<int>();
+        X = params["X"].as<int>();
+        Y = params["Y"].as<int>();
+        Z = params["Z"].as<int>();
     }
 
     // region A
-    int A_size;
-    int Ap_size;
-    if (not(params.count("beta"))){
-        cerr << "Error: define the inverse temperature (beta)" << endl;
+    int Ax;
+    int Ay;
+    int APx;
+    int APy;
+    if (not(params.count("Ax")) or not(params.count("APx"))){
+        cerr << "Error: define the entangled regions (Ax, Ay, APx, APy)" << endl;
         return 1;
     }
     else{ 
-        A_size   = params["A"].as<int>();
-        Ap_size = params["Ap"].as<int>();
+        Ax  = params["Ax"].as<int>();
+        Ay  = params["Ay"].as<int>();
+        APx = params["APx"].as<int>();
+        APy = params["APy"].as<int>();
     }
 
 
 
     // Define physical constants --------------------------------------------------------
-    int   N      = width * height;
+    int   N      = X * Y * Z;
     int   reps   = 2;
 
     // Initialize random objects --------------------------------------------------------
-    vector<double> probTable = {1, exp(-4.0*beta), exp(-8.0*beta)};
+    vector<double> probTable = {1, exp(-4.0*beta), exp(-8.0*beta), exp(-12.0*beta)};
     
-    //double Sum = 0;
-    //for (auto pe=probTable.begin(); pe!=probTable.end(); pe++)
-    //    Sum += *pe;
-    //
-    //for (auto pe=probTable.begin(); pe!=probTable.end(); pe++){
-    //    *pe = *pe/Sum;
-    //    cout << *pe << endl;
-    //}
-
     boo::mt19937 engine(seed);
-    boo::uniform_int<uint64_t> UDInt(0, N-1); 
+    boo::uniform_int<uint64_t> UDInt(0, reps*N-1); 
     boo::uniform_real<double>  UDReal(0,1);
     boo::variate_generator<boo::mt19937&, boo::uniform_int<uint64_t> > RandInt( engine, UDInt );
     boo::variate_generator<boo::mt19937&, boo::uniform_real<double> >   RandReal(engine, UDReal);
@@ -155,28 +154,40 @@ int main(int argc, char *argv[]){
     
     // Initialize a spins state ---------------------------------------------------------
     Spins spins;
-    for (int i=0; i!=width*height; i++){
+    for (int i=0; i!=N*reps; i++){
         spins.Add((RandInt()%2)*2-1);
     }
     //spins.print();
 
     
     // Initialize region A and A', dA = A - A' (A' is always assummed to be larger)
-    vector<int> A;
-    vector<int> Ap;
-    vector<int> dA;
-    A.clear(); Ap.clear(); dA.clear();
-    for (auto i=0;      i!=A_size;  i++) A.push_back(i);
-    for (auto i=0;      i!=Ap_size; i++) Ap.push_back(i);
-    for (auto i=A_size; i!=Ap_size; i++) dA.push_back(i);
-   
-     
+    vector<int> A;  A.clear(); 
+    vector<int> Ap; Ap.clear();
+    vector<int> dA; dA.clear();
+    
+    for (auto y=0; y!=Ay; y++){
+        for (auto x=0; x!=Ax; x++){
+            A.push_back(y*X + x);
+        }
+    }
+    for (auto y=0; y!=APy; y++){
+        for (auto x=0; x!=APx; x++){
+            Ap.push_back(y*X + x);
+        }
+    }
+    
+    for (auto a=Ap.begin(); a!=Ap.end(); a++){
+        if (find(A.begin(), A.end(), *a)==A.end()){
+            dA.push_back(*a);
+        }
+    }
+
     // Initialize the main simulation cell corresponding to the region A --------------------
-    SimulationCell SC(width, height, &spins, A);
+    SimulationCell SC(X, Y, Z, &spins, A);
     //SC.print();
    
     // Also initilize the simulation cell based on the region A'. It is used as a A'-BCs builder
-    SimulationCell SCP(width, height, &spins, Ap);
+    SimulationCell SCP(X, Y, Z, &spins, Ap);
     //SCP.print();
     
     // Initialize the cluster builders -------------------
@@ -185,7 +196,7 @@ int main(int argc, char *argv[]){
 
     
     // Initialize file objects ----------------------------------------------------------
-    Communicator communicator(reps, width, height, A_size, Ap_size, beta, seed);
+    Communicator communicator(reps, X, Y, Z, Ax*Ay, APx*APy, beta, seed);
     string eHeader = "";
     eHeader += boo::str(boo::format("#%15s%16s%16s")%"ET/N"%"Z_Ap/Z_A"%"Z_Ap/Z_A2"); 
     *communicator.stream("estimator")<< eHeader << endl; 
@@ -214,6 +225,7 @@ int main(int argc, char *argv[]){
            
             CB.ResetPartition();
             CB.FlipTraceCluster(0, initSpin);
+            //CB.CrumbTraceCluster(0, initSpin);
             //int t=0;
             //for (auto s=CB.GetPartition().begin(); s!=CB.GetPartition().end(); s++){
             //    if (*s != -1)
@@ -282,7 +294,7 @@ int main(int argc, char *argv[]){
             ZR2 += pow(2, NCP-NCA);
         }
         
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(signJ*ET/(1.0*binSize*N)));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(signJ*ET/(1.0*binSize*reps*N)));
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR /(1.0*binSize)));
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR2/(1.0*binSize)));
         *communicator.stream("estimator") << endl;    
