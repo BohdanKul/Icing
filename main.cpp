@@ -37,7 +37,8 @@ int main(int argc, char *argv[]){
     
     po::options_description PhysicalOptions("Physical options");
     PhysicalOptions.add_options()
-        ("beta,   b", po::value<double>()->default_value(beta_c),  "inverse temperature")
+        ("beta,   b", po::value<double>(),  "inverse temperature")
+        ("T,      T", po::value<double>(),  "temperature")
         ("signJ,  J", po::value<int>()->default_value(-1),         "ferromagnetic (-1) or antiferromagnetic (+1) coupling")
         ("X, X",      po::value<int>(),                            "lattice X")
         ("Y, Y",      po::value<int>(),                            "lattice Y")
@@ -81,12 +82,14 @@ int main(int argc, char *argv[]){
    
     // beta
     double beta   = 0.0;
-    if (not(params.count("beta"))){
-        cerr << "Error: define the inverse temperature (beta)" << endl;
+    if (not(params.count("beta")) and not(params.count("T"))){
+        cerr << "Error: define the temperature (beta or T)" << endl;
         return 1;
     }
-    else 
-        beta = params["beta"].as<double>();
+    else{
+        if (params.count("beta")) beta = params["beta"].as<double>();
+        else                      beta = 1.0/params["T"].as<double>();
+    }
 
     // sign J
     int signJ;
