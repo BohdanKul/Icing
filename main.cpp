@@ -13,7 +13,6 @@
 #include <boost/filesystem.hpp>
 
 #include "spins.h"
-#include "lattice.h"
 #include "simulationcell.h"
 #include "subroutines.h"
 #include "communicator.h"
