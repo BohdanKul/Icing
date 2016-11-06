@@ -30,9 +30,10 @@ int main(int argc, char *argv[]){
     po::options_description SimulationOptions("Simulation options");
     SimulationOptions.add_options()
         ("help,h",  "produce help message")
-        ("seed, s", po::value<long>()->default_value(0),   "random generator seed")
-        ("meas, m", po::value<int>(),                      "number of measurements (bins) to take")
-        ("binsize", po::value<int>()->default_value(100),  "number of MC sweeps per bin")
+        ("seed, s", po::value<long>()->default_value(0),    "random generator seed")
+        ("meas, m", po::value<int>(),                       "number of measurements (bins) to take")
+        ("binsize", po::value<int>()->default_value(100),   "number of MC sweeps per bin")
+        ("state",   po::value<string>()->default_value(""), "path to the state file")
         ;
     
     po::options_description PhysicalOptions("Physical options");
@@ -146,21 +147,54 @@ int main(int argc, char *argv[]){
 
     // Initialize random objects --------------------------------------------------------
     vector<double> probTable = {1, exp(-4.0*beta), exp(-8.0*beta), exp(-12.0*beta)};
-    
+
     boo::mt19937 engine(seed);
     boo::uniform_int<uint64_t> UDInt(0, reps*N-1); 
     boo::uniform_real<double>  UDReal(0,1);
-    boo::variate_generator<boo::mt19937&, boo::uniform_int<uint64_t> > RandInt( engine, UDInt );
-    boo::variate_generator<boo::mt19937&, boo::uniform_real<double> >   RandReal(engine, UDReal);
-    
-    
-    // Initialize a spins state ---------------------------------------------------------
-    Spins spins;
-    for (int i=0; i!=N*reps; i++){
-        spins.Add((RandInt()%2)*2-1);
-    }
-    //spins.print();
+    boo::variate_generator<boo::mt19937&, boo::uniform_int<uint64_t>> RandInt( engine, UDInt );
+    boo::variate_generator<boo::mt19937&, boo::uniform_real<double> > RandReal(engine, UDReal);
+   
+    // Initialize file objects ----------------------------------------------------------
+    Communicator communicator(params["state"].as<string>(), reps, X, Y, Z, Ax*Ay, APx*APy, beta, seed);
+    string eHeader = "";
+    eHeader += boo::str(boo::format("#%15s%16s%16s")%"ET/N"%"Z_Ap/Z_A"%"Z_Ap/Z_A2"); 
+    *communicator.stream("estimator")<< eHeader << endl; 
+    long ID = communicator.getId();
 
+ 
+    // The spins object
+    Spins spins;
+    
+    // If restarting from a previously saved state, load the RN generator engine and spins states.
+    if (params["state"].as<string>() != ""){
+        // Buffer variables 
+        string        sBuf;
+        stringstream ssBuf;
+
+        // Reset the distributions' state
+         RandInt.distribution().reset();
+        RandReal.distribution().reset();
+    
+        // Load the engine    
+        getline(*communicator.stream("state"), sBuf);
+        ssBuf << sBuf;
+        ssBuf >> engine; 
+        
+        // Load the spins state
+        istringstream issBuf;
+        getline(*communicator.stream("state"), sBuf);
+        issBuf.str(sBuf);
+        int ispin;
+        while (issBuf >> ispin){
+            spins.Add(ispin);
+        }
+    }
+    // Otherwise, initialize the spins state to random values
+    else{
+        for (int i=0; i!=N*reps; i++) 
+            spins.Add((RandInt()%2)*2-1);
+    }
+    
     
     // Initialize region A and A', dA = A - A' (A' is always assummed to be larger)
     vector<int> A;  A.clear(); 
@@ -195,15 +229,6 @@ int main(int argc, char *argv[]){
     // Initialize the cluster builders -------------------
     ClusterBuilder CB(SC, SCP,  beta, signJ, RandReal); 
     
-
-    
-    // Initialize file objects ----------------------------------------------------------
-    Communicator communicator(reps, X, Y, Z, Ax*Ay, APx*APy, beta, seed);
-    string eHeader = "";
-    eHeader += boo::str(boo::format("#%15s%16s%16s")%"ET/N"%"Z_Ap/Z_A"%"Z_Ap/Z_A2"); 
-    *communicator.stream("estimator")<< eHeader << endl; 
-    long ID = communicator.getId();
-
 
     // Start the main MC loop -----------------------------------------------------------
     int initSpin;
@@ -301,6 +326,19 @@ int main(int argc, char *argv[]){
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR2/(1.0*binSize)));
         *communicator.stream("estimator") << endl;    
         
+    
+        // Save the state. 
+        // Reseting the distributions state doesn't interfer with the ongoing generation of RNs.
+        // However, it is required for a proper restart. 
+         RandInt.distribution().reset();
+        RandReal.distribution().reset();
+        communicator.reset("state");
+        *communicator.stream("state") << engine << endl;
+        
+        for (auto k=0; k!=SC.GetSize(); k++)
+            *communicator.stream("state") << SC.GetSpins().Get(k) << " ";
+        *communicator.stream("state") << endl;    
+     
         cout << ID << ": Measurement taken" << endl;
     }
     return 0;
