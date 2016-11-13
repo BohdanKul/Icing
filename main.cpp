@@ -35,7 +35,8 @@ int main(int argc, char *argv[]){
         ("binsize", po::value<int>()->default_value(100),   "number of MC sweeps per bin")
         ("state",   po::value<string>()->default_value(""), "path to the state file")
         ;
-    
+   
+    bool snake_tiling; 
     po::options_description PhysicalOptions("Physical options");
     PhysicalOptions.add_options()
         ("beta,   b", po::value<double>(),  "inverse temperature")
@@ -44,6 +45,7 @@ int main(int argc, char *argv[]){
         ("X, X",      po::value<int>(),                            "lattice X")
         ("Y, Y",      po::value<int>(),                            "lattice Y")
         ("Z, Z",      po::value<int>(),                            "lattice Z") 
+        ("snake",     po::bool_switch(&snake_tiling)->default_value(false),"snake-like build up of region A") 
         ("Ax",        po::value<int>(),                            "region A width")
         ("Ay",        po::value<int>()->default_value(1),          "region A height")
         ("APx",       po::value<int>(),                            "region A prime width")
@@ -155,7 +157,11 @@ int main(int argc, char *argv[]){
     boo::variate_generator<boo::mt19937&, boo::uniform_real<double> > RandReal(engine, UDReal);
    
     // Initialize file objects ----------------------------------------------------------
-    Communicator communicator(params["state"].as<string>(), reps, X, Y, Z, Ax*Ay, APx*APy, beta, seed);
+    int NA; int NAP;
+    if (snake_tiling){ NA  = Ax;    NAP = APx; }
+    else{              NA  = Ax*Ay; NAP = APx*APy; }
+
+    Communicator communicator(params["state"].as<string>(), reps, X, Y, Z, NA, NAP, beta, seed);
     string eHeader = "";
     eHeader += boo::str(boo::format("#%15s%16s%16s")%"ET/N"%"Z_Ap/Z_A"%"Z_Ap/Z_A2"); 
     *communicator.stream("estimator")<< eHeader << endl; 
@@ -201,17 +207,27 @@ int main(int argc, char *argv[]){
     vector<int> Ap; Ap.clear();
     vector<int> dA; dA.clear();
     
-    for (auto y=0; y!=Ay; y++){
-        for (auto x=0; x!=Ax; x++){
-            A.push_back(y*X + x);
-        }
+    // For the snake-like build up of region A, spins are added strip by strip until the number
+    // specified by Ax or Apx is reached
+    if (snake_tiling){
+        for (auto x=0; x!=Ax;  x++) A.push_back(x);
+        for (auto x=0; x!=APx; x++) Ap.push_back(x);
     }
-    for (auto y=0; y!=APy; y++){
-        for (auto x=0; x!=APx; x++){
-            Ap.push_back(y*X + x);
+    // Otherwise, the spins which lie within the square boundaries defined by (Ax, Ay) pair are added.
+    else{
+        for (auto y=0; y!=Ay; y++){
+            for (auto x=0; x!=Ax; x++){
+                A.push_back(y*X + x);
+            }
+        }
+        for (auto y=0; y!=APy; y++){
+            for (auto x=0; x!=APx; x++){
+                Ap.push_back(y*X + x);
+            }
         }
     }
     
+    // Remember the difference between the two regions
     for (auto a=Ap.begin(); a!=Ap.end(); a++){
         if (find(A.begin(), A.end(), *a)==A.end()){
             dA.push_back(*a);
