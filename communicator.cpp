@@ -49,7 +49,8 @@ Communicator::Communicator(string rfName, int _r, int _X, int _Y, int _Z, int _s
            exit(EXIT_FAILURE); 
         }
     }
-    
+    sfile      = str(format("%s/%s-%s-%09d.dat") %outDir %"state" %dataName %id);
+    sfile_copy = sfile + 'a';  
 }
 
 /****************************************************************************************************
@@ -84,8 +85,8 @@ fstream* Communicator::stream(string _filetype)
 void Communicator::reset(string _filetype)
 {
     mFStreams[_filetype]->close();
-    string filename = boost::str(boost::format("%s/%s-%s-%09d.dat") %outDir %_filetype %dataName %id);
-    mFStreams[_filetype]->open(filename, fstream::out|fstream::trunc);
+    filesystem::copy_file(sfile, sfile_copy, filesystem::copy_option::overwrite_if_exists);
+    mFStreams[_filetype]->open(sfile, fstream::out|fstream::trunc);
 }
 
 
