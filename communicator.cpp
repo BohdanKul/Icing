@@ -85,7 +85,7 @@ fstream* Communicator::stream(string _filetype)
 void Communicator::reset(string _filetype)
 {
     mFStreams[_filetype]->close();
-    filesystem::copy_file(sfile, sfile_copy, filesystem::copy_option::overwrite_if_exists);
+    filesystem::copy_file(filesystem::path(sfile), filesystem::path(sfile_copy), filesystem::copy_option::overwrite_if_exists);
     mFStreams[_filetype]->open(sfile, fstream::out|fstream::trunc);
 }
 
