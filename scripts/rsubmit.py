@@ -30,7 +30,6 @@ for fname in fileNames:
 
     sublist += [subcommand]
 
-print sublist
 #switch back to folder we used to be
 os.chdir(CurrentFolder)
 
@@ -40,7 +39,7 @@ scriptFile.write('''#!/bin/bash\n\n''')
 
 # Create the command string and output to submit file
 for subcommand in sublist:
-    scriptFile.write('sqsub -q NAP_8998 -o output -e output --mpp=1G -r 7d ../../main.so --snake --meas 10000 --signJ -1 --beta 0.22165 %s\n' %(subcommand))
+    scriptFile.write('sqsub -q NAP_8998 -o output -e output --mpp=1G -r 7d ../../main.so %s --snake --meas 10000 --signJ -1 --beta 0.22165\n' %(subcommand))
 
 scriptFile.close()
 os.system('chmod u+x %s'%fileName)
