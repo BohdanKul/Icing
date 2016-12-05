@@ -12,7 +12,7 @@
 #include <boost/property_map/property_map.hpp>
 
 #include "simulationcell.h"
-#include "unitcell.h"
+#include "hypercube.h"
 //#include "spins.h"
 
 
