@@ -30,10 +30,13 @@ int main(int argc, char *argv[]){
     po::options_description SimulationOptions("Simulation options");
     SimulationOptions.add_options()
         ("help,h",  "produce help message")
-        ("seed, s", po::value<long>()->default_value(0),    "random generator seed")
-        ("meas, m", po::value<int>(),                       "number of measurements (bins) to take")
-        ("binsize", po::value<int>()->default_value(100),   "number of MC sweeps per bin")
-        ("state",   po::value<string>()->default_value(""), "path to the state file")
+        ("seed, s", po::value<long>()->default_value(0),       "random generator seed")
+        ("meas, m", po::value<int>(),                          "number of measurements (bins) to take")
+        ("binsize", po::value<int>()->default_value(100),      "number of MC sweeps per bin")
+        ("equil",   po::value<int>()->default_value(0),        "number of equilibration steps")
+        ("wfrac",   po::value<double>()->default_value(0.001), "fraction of Wolff updates")
+        ("sfrac",   po::value<double>()->default_value(0.5),   "fraction of single-spin updates")
+        ("state",   po::value<string>()->default_value(""),    "path to the state file")
         ;
    
     bool snake_tiling; 
@@ -161,7 +164,7 @@ int main(int argc, char *argv[]){
     if (snake_tiling){ NA  = Ax;    NAP = APx; }
     else{              NA  = Ax*Ay; NAP = APx*APy; }
 
-    Communicator communicator(params["state"].as<string>(), reps, X, Y, Z, NA, NAP, beta, seed);
+    Communicator communicator(params["state"].as<string>(), reps, X, Y, Z, NA, NAP, beta, params["wfrac"].as<double>(), params["sfrac"].as<double>(), seed);
     string eHeader = "";
     eHeader += boo::str(boo::format("#%15s%16s%16s")%"ET/N"%"Z_Ap/Z_A"%"Z_Ap/Z_A2"); 
     *communicator.stream("estimator")<< eHeader << endl; 
@@ -238,15 +241,108 @@ int main(int argc, char *argv[]){
     SimulationCell SC(X, Y, Z, &spins, A);
     //SC.print();
    
-    // Also initilize the simulation cell based on the region A'. It is used as a A'-BCs builder
+    // Initilize the simulation cell based on the region A'. It is used as a A'-BCs builder
     SimulationCell SCP(X, Y, Z, &spins, Ap);
-    //SCP.print();
     
+    //SCP.print();
     // Initialize the cluster builders -------------------
+   
+    if (params["equil"].as<int>()>0){
+        cout << " Equilibration stage initiated " << endl;
+        ClusterBuilder* pCB = new ClusterBuilder(SC, SC,  beta, signJ, RandReal); 
+        string sHeader = "";
+        sHeader += boo::str(boo::format("#%15s%16s%16s%16s%16s%16s")%"N_f^W/N"%"N_f^s/N"%"N_f^T/N"%"N_f^W/N_a^W"%"N_f^s/N_a^s"%"CS"); 
+        *communicator.stream("stats")<< sHeader << endl; 
+        Spins tspins;
+        Spins Tspins;
+        int Nspins = spins.GetSize();
+        double sfrac = params["sfrac"].as<double>();
+        double wfrac = params["wfrac"].as<double>();
+        int Nclusters = int(wfrac*Z);
+        int Nflips   = int(sfrac*Nspins);
+
+        double  CS;   // total clusters size in each sweep
+        double tCS;   // accumulative cluster size
+        double weff;  // efficiency of a Wolf update: number of updated spins per number of spins in formed clusters
+        double RN;    // random number storage
+        double wNF;   // number of updated spins in a Wolff update
+        double WNF;   // the same but for accumulative
+        double sNF;   // number of updated spins in a single-spin update
+        double tNF;   // number of updated spins in a sweep
+        int spinA;    
+        int ispin;
+        int EF;
+        for (auto i=0; i!=params["equil"].as<int>(); i++){
+            tCS = 0; weff = 0; wNF = 0; WNF = 0; sNF = 0; tNF = 0; 
+            for (auto j=0; j!=100; j++){
+                Tspins = spins;  // used to track the efficiency of the whole sweep
+                tspins = spins;  // used to track the efficiency of a particular kind of update
+                
+                // Do a predetermined number of Wolff updates
+                CS = 0;
+                for (auto k=0; k!=Nclusters; k++){
+                    pCB->ResetPartition();
+                    pCB->FlipTraceCluster(k, RandInt(), CS);
+                }
+                tCS += CS;
+
+                // Determine the number of updated spins during this update
+                wNF = 0;
+                for (auto sindex=0; sindex!=Nspins; sindex++){
+                    if (tspins.Get(sindex) != spins.Get(sindex)){
+                        wNF += 1;
+                    }
+                }
+                weff += wNF/CS; // wolff update efficiency estimator
+                WNF  += wNF;    // and its accumulative version
+                
+                // Do a single-spin update
+                tspins = spins;
+                for (auto k=0; k!=Nflips; k++){
+                    ispin = RandInt();
+                    EF    = GetEffectiveField(SC, ispin);
+                    spinA = SC.GetSpins().Get(ispin);
+                    
+                    RN = RandReal();
+                    if  (spinA*signJ*EF>0)
+                        SC.GetSpins().Flip(ispin);   
+                    else{
+                        if (RandReal() < probTable[(int) abs(EF)/2]) 
+                            SC.GetSpins().Flip(ispin);
+                        }
+                }
+                
+                // Determine the number of updated spins during this update
+                for (auto sindex=0; sindex!=Nspins; sindex++){
+                    if (tspins.Get(sindex) != spins.Get(sindex)){
+                        sNF += 1;
+                    }
+                }
+                
+                // Determine the number of updated spins during the whole sweep
+                for (auto sindex=0; sindex!=Nspins; sindex++){
+                    if (Tspins.Get(sindex) != spins.Get(sindex)){
+                        tNF += 1;
+                    }
+                }
+            }
+        cout << ID << ": Equilibration step " << int(Nclusters) << endl;
+        *communicator.stream("stats") << boo::str(boo::format("%16.8E") %(WNF/(1.0*binSize*Nspins)));
+        *communicator.stream("stats") << boo::str(boo::format("%16.8E") %(sNF/(1.0*binSize*Nspins)));
+        *communicator.stream("stats") << boo::str(boo::format("%16.8E") %(tNF/(1.0*binSize*Nspins)));
+        *communicator.stream("stats") << boo::str(boo::format("%16.8E") %(weff/(1.0*binSize)));
+        *communicator.stream("stats") << boo::str(boo::format("%16.8E") %(sNF/(1.0*binSize*Nflips)));
+        *communicator.stream("stats") << boo::str(boo::format("%16.8E") %(tCS/(1.0*binSize*Nclusters)));
+        *communicator.stream("stats") << endl;    
+
+        }
+        delete pCB; 
+    }
+
+
     ClusterBuilder CB(SC, SCP,  beta, signJ, RandReal); 
     
-
-    // Start the main MC loop -----------------------------------------------------------
+     // Start the main MC loop -----------------------------------------------------------
     int initSpin;
     int spinA; 
     int EF;
@@ -255,6 +351,7 @@ int main(int argc, char *argv[]){
     double ZR;
     double ZR2;
     double RN=0;
+    double clustersize;
     for (auto i=0; i!=Nmeas; i++){
         ET = 0; ZR = 0; ZR2 = 0;
         for (auto j=0; j!=binSize; j++){
@@ -267,7 +364,7 @@ int main(int argc, char *argv[]){
             initSpin = RandInt() ; // pick randomly the initial spin
            
             CB.ResetPartition();
-            CB.FlipTraceCluster(0, initSpin);
+            CB.FlipTraceCluster(0, initSpin, clustersize);
             //CB.CrumbTraceCluster(0, initSpin);
             //int t=0;
             //for (auto s=CB.GetPartition().begin(); s!=CB.GetPartition().end(); s++){
