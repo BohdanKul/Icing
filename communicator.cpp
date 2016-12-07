@@ -10,15 +10,15 @@ using namespace boost;
 
 /****************************************************************************************************
  ***************************************************************************************************/
-Communicator::Communicator(string rfName, int _r, int _X, int _Y, int _Z, int _sizeA, int _sizeAp, float _beta, long _p)
+Communicator::Communicator(string rfName, int _r, int _X, int _Y, int _Z, int _sizeA, int _sizeAp, double _beta, double wfrac, double sfrac, long _p)
 {
     p = _p;
      
     // Build the filename 
-    dataName = str(format("%02d-%03d-%03d-%03d-%03d-%03d-b%06.3f") %_r %_X %_Y %_Z %_sizeA %_sizeAp %_beta);
+    dataName = str(format("%02d-%03d-%03d-%03d-%03d-%03d-b%06.3f-%06.5f-%06.5f") %_r %_X %_Y %_Z %_sizeA %_sizeAp %_beta %wfrac %sfrac);
     dataName +=str(format("-p%05d") %_p);
 
-    types  = vector<string> {"estimator", "state"};
+    types  = vector<string> {"estimator", "state", "stats"};
     outDir = "OUTPUT"; 
     
     // Generate id
