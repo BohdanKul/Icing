@@ -44,7 +44,7 @@ class ClusterBuilder{
         
         void ReconnectLinks(vector<int>& dA); // 
 
-        bool  FlipTraceCluster(int ncluster, int nspin);
+        bool  FlipTraceCluster(int ncluster, int nspin, double& clustersize);
         bool CrumbTraceCluster(int ncluster, int nspin);
         bool EatCrumbs(int ncluster, int nspin);
 
@@ -91,7 +91,7 @@ void ClusterBuilder::ResetLinks(){
  * controlled with the bool variable toFlip. The returned value indicates whether a new cluster has
  * been traced. 
  ***************************************************************************************************/
-bool ClusterBuilder::FlipTraceCluster(int ncluster, int nspin){
+bool ClusterBuilder::FlipTraceCluster(int ncluster, int nspin, double& clustersize){
     if (Cluster_Partition[nspin] != -1) return false;
     
     Cluster_Partition[nspin] = ncluster;
@@ -99,11 +99,12 @@ bool ClusterBuilder::FlipTraceCluster(int ncluster, int nspin){
     for (auto nghb  = SC.GetLattice().at(nspin).begin(); nghb != SC.GetLattice().at(nspin).end(); nghb++){
         if  ((Cluster_Partition[*nghb] == -1) and (SC.GetSpins().Get(*nghb) * SC.GetSpins().Get(nspin))==-signJ){
             if (RealRnd() < P){
-                FlipTraceCluster(ncluster, *nghb); 
+                FlipTraceCluster(ncluster, *nghb, clustersize); 
             }
         }
     }
 
+    clustersize += 1;
     SC.GetSpins().Flip(nspin);
     return true;
 }
