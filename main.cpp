@@ -306,7 +306,7 @@ int main(int argc, char *argv[]){
             }
 
             // Perform measurements --------------------------------------------------------
-            ET += GetEnergy(SC);
+            //ET += GetEnergy(SC);
             //ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP) - GetBoundaryEnergy(SC)));
             
             ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP, dA) - GetBoundaryEnergy(SC, dA)));
