@@ -97,7 +97,8 @@ bool ClusterBuilder::FlipTraceCluster(int ncluster, int nspin){
     Cluster_Partition[nspin] = ncluster;
     
     for (auto nghb  = SC.GetLattice().at(nspin).begin(); nghb != SC.GetLattice().at(nspin).end(); nghb++){
-        if  ((Cluster_Partition[*nghb] == -1) and (SC.GetSpins().Get(*nghb) * SC.GetSpins().Get(nspin))==-signJ){
+        if  ((Cluster_Partition[*nghb] != ncluster) and (SC.GetSpins().Get(*nghb) * SC.GetSpins().Get(nspin))==-signJ){
+        //if  ((Cluster_Partition[*nghb] == -1) and (SC.GetSpins().Get(*nghb) * SC.GetSpins().Get(nspin))==-signJ){
             if (RealRnd() < P){
                 FlipTraceCluster(ncluster, *nghb); 
             }
