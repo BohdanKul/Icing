@@ -82,10 +82,24 @@ fstream* Communicator::stream(string _filetype)
 
 /****************************************************************************************************
  ***************************************************************************************************/
+void Communicator::CopyOverwrite(string from, string to)
+{
+    if (filesystem::exists(filesystem::path(to)))
+        filesystem::remove(filesystem::path(to));
+
+    //this function has an option overwrite_if_exists. However,
+    // it is bugged in boost versions previous to 1.46.0. It only
+    // overwrites the size of the from file without truncating the
+    // rest of to file.
+    filesystem::copy_file(filesystem::path(from), filesystem::path(to)); 
+}
+
+/****************************************************************************************************
+ ***************************************************************************************************/
 void Communicator::reset(string _filetype)
 {
     mFStreams[_filetype]->close();
-    filesystem::copy_file(filesystem::path(sfile), filesystem::path(sfile_copy), filesystem::copy_option::overwrite_if_exists);
+    CopyOverwrite(sfile, sfile_copy);
     mFStreams[_filetype]->open(sfile, fstream::out|fstream::trunc);
 }
 

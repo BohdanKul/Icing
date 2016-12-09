@@ -17,7 +17,6 @@ using namespace std;
 
 class SimulationCell{
     protected:
-        int r;                           // number of replicas
         int rN;                          // number of spins in a replica
         char u; char d;                  // orientation in the +1 dimension
         int dim;
@@ -27,20 +26,16 @@ class SimulationCell{
                                          // as dictated by the region A
         vector<vector<int>> nghbs;       // for each index, the vector keeps track of the neighbours
 
-        int  GetFlatCrd(int _r, int _sindex){ // get the index of a spin located at _sindex of replica r
-            return _r*rN + _sindex;         
-        }
-
     public:
         SimulationCell(int _X, int _Y, int _Z, Spins* _spins, vector<int>& _A);
        
         Spins& GetSpins(){ return *spins;};    // get access to the spins  
-        int    GetSize(){  return r*rN;};         // get the full size of simulation cell
+        int    GetSize(){  return 2*rN;};         // get the full size of simulation cell
         int    GetDim(){   return dim;};
         char   GetU(){     return u;};
         char   GetD(){     return d;};
         
-        vector<vector<int>>& GetLattice(){    return nghbs;};    // get access to the neighbours info 
+        vector<vector<int>>&   GetLattice(){  return nghbs;};    // get access to the neighbours info 
         vector<pair<int,int>>& GetBoundary(){ return boundary;}; // get the boundary connectivity
         void print();    // ugly but useful debugging routines
 };
@@ -55,68 +50,54 @@ SimulationCell::SimulationCell(int _X, int _Y, int _Z, Spins* _spins, vector<int
 
     // Initialize two replicas that are not connected to each other at first. 
     // Those are temporary data structures helping to build the full lattice.
-    r=2;
-    vector<HyperCube> replicas;
-    replicas.push_back(HyperCube(0, _X, _Y, _Z)); 
-    replicas.push_back(HyperCube(1, _X, _Y, _Z)); 
+    HyperCube HC(_X, _Y, _Z);
     
-    rN  = replicas[0].GetSize();   
-    dim = replicas[0].GetDim(); 
-    
-    u  = replicas[0].GetUp();
-    d  = replicas[1].GetDown();
-    
+    rN = HC.GetSize();   
+    d  = HC.GetDown();
+    u  = HC.GetUp();
+    dim = HC.GetDim();    
 
     int bspin1; int tspin1;
     int bspin2; int tspin2;
 
-
-    for (auto i=0; i!=replicas[0].GetBoundary().size(); i++){
+    for (auto sindex=0; sindex!=rN; sindex++){
+        nghbs.push_back(HC.GetSpinNghbs(sindex));
+    }
+    for (auto sindex=0; sindex!=rN; sindex++){
+        nghbs.push_back(vector<int>());
+        for (auto nghb=nghbs[sindex].begin(); nghb!=nghbs[sindex].end(); nghb++){
+            nghbs[rN+sindex].push_back(*nghb + rN);
+        }
+    }
+     
+    for (auto i=0; i!=HC.GetBoundarySize(); i++){
         
         // determine the boundary spins that need to get rewired 
-        bspin1 = replicas[0].GetBoundary().at(i).first; 
-        tspin1 = replicas[0].GetBoundary().at(i).second;
-        bspin2 = replicas[1].GetBoundary().at(i).first; 
-        tspin2 = replicas[1].GetBoundary().at(i).second;
+        HC.GetBoundaryPair(i, bspin1, tspin1); 
+        bspin2 = bspin1 + rN;
+        tspin2 = tspin1 + rN; 
 
         // if the spins aren't part of region A, link them intra-replicas
         if (find(_A.begin(), _A.end(), bspin1)==_A.end()) {
-            replicas[0].GetUnitCell(bspin1).SetNghb(d, Crd(0, tspin1));
-            replicas[0].GetUnitCell(tspin1).SetNghb(u, Crd(0, bspin1));
-            replicas[1].GetUnitCell(bspin2).SetNghb(d, Crd(1, tspin2));
-            replicas[1].GetUnitCell(tspin2).SetNghb(u, Crd(1, bspin2));
-
-            boundary.push_back(make_pair(GetFlatCrd(0, bspin1), GetFlatCrd(0, tspin1)));
-            boundary.push_back(make_pair(GetFlatCrd(1, bspin2), GetFlatCrd(1, tspin2)));
+            nghbs[bspin1][DMap.at(d)] = tspin1;
+            nghbs[tspin1][DMap.at(u)] = bspin1;
+            nghbs[bspin2][DMap.at(d)] = tspin2;
+            nghbs[tspin2][DMap.at(u)] = bspin2;
             
+            boundary.push_back(make_pair(bspin1, tspin1)); // the order is important!
+            boundary.push_back(make_pair(bspin2, tspin2)); // the order is important!
         }
         // otherwise, an inter-replicas links are created
         else{
-            replicas[0].GetUnitCell(bspin1).SetNghb(d, Crd(1, tspin2));
-            replicas[0].GetUnitCell(tspin1).SetNghb(u, Crd(1, bspin2));
-            replicas[1].GetUnitCell(bspin2).SetNghb(d, Crd(0, tspin1));
-            replicas[1].GetUnitCell(tspin2).SetNghb(u, Crd(0, bspin1));
-         
-            boundary.push_back(make_pair(GetFlatCrd(0, bspin1), GetFlatCrd(1, tspin2)));
-            boundary.push_back(make_pair(GetFlatCrd(1, bspin2), GetFlatCrd(0, tspin1)));
+            nghbs[bspin1][DMap.at(d)] = tspin2;
+            nghbs[tspin1][DMap.at(u)] = bspin2;
+            nghbs[bspin2][DMap.at(d)] = tspin1;
+            nghbs[tspin2][DMap.at(u)] = bspin1;
+            
+            boundary.push_back(make_pair(bspin1, tspin2)); // the order is important!
+            boundary.push_back(make_pair(bspin2, tspin1)); // the order is important!
         }
     }
-
-    
-    // store all the connectivity information into a flat vector
-    for (auto _r=0; _r!=r; _r++){
-        for (auto _s=0; _s!=replicas[_r].GetSize(); _s++){
-            nghbs.push_back(vector<int>());
-            for (auto nghb  = replicas[_r].GetUnitCell(_s).GetNghbs().begin(); 
-                      nghb != replicas[_r].GetUnitCell(_s).GetNghbs().end(); 
-                      nghb++)
-                nghbs[GetFlatCrd(_r, _s)].push_back(GetFlatCrd(nghb->GetRep(), nghb->GetInd()));
-
-        }
-    }
-
-    // At this point, the informaion contained in the replicas is redundant.  Destroy them.
-    replicas.clear();
 
 }
 

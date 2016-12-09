@@ -255,6 +255,15 @@ int main(int argc, char *argv[]){
     double ZR;
     double ZR2;
     double RN=0;
+    
+    // Set up MC update parameters
+    const float fw = 1.0/16.0;  // fraction controlling the scaling of Wolff clusters per a MC sweep
+    int Nclusters = int(fw*Z);  // number of Wolff clusters per a sweep
+    if (Nclusters < 1){ Nclusters = 1;};
+    
+    const float fs = 1.0/8.00;  // fraction controlling the number of single spin updates per a MCsweep
+    int Nss  = int(fs*SC.GetSize()); // number of single spin updates 
+
     for (auto i=0; i!=Nmeas; i++){
         ET = 0; ZR = 0; ZR2 = 0;
         for (auto j=0; j!=binSize; j++){
@@ -262,12 +271,12 @@ int main(int argc, char *argv[]){
             
             if (debug) cout << "    cluster partition is reset" << endl;
 
-            // perform a Wolff cluster update
-            
-            initSpin = RandInt() ; // pick randomly the initial spin
-           
+            // perform Wolff cluster updates
             CB.ResetPartition();
-            CB.FlipTraceCluster(0, initSpin);
+            for (auto k=0; k!= Nclusters; k++){
+                initSpin = RandInt() ; // pick randomly the initial spin
+                CB.FlipTraceCluster(0, initSpin);
+            }
             //CB.CrumbTraceCluster(0, initSpin);
             //int t=0;
             //for (auto s=CB.GetPartition().begin(); s!=CB.GetPartition().end(); s++){
@@ -282,7 +291,7 @@ int main(int argc, char *argv[]){
             }
             // perform single spin updates
             int ispin = 0;
-            for (auto k=0; k!=SC.GetSize(); k++){
+            for (auto k=0; k!=Nss; k++){
                 ispin = RandInt();
                 EF    = GetEffectiveField(SC, ispin);
                 spinA = SC.GetSpins().Get(ispin);
@@ -297,7 +306,7 @@ int main(int argc, char *argv[]){
             }
 
             // Perform measurements --------------------------------------------------------
-            ET += GetEnergy(SC);
+            //ET += GetEnergy(SC);
             //ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP) - GetBoundaryEnergy(SC)));
             
             ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP, dA) - GetBoundaryEnergy(SC, dA)));

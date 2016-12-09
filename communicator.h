@@ -27,6 +27,7 @@ class Communicator
         long id;
         long p;
         void GenerateId();
+        void CopyOverwrite(string from, string to);
         string sfile;
         string sfile_copy;
         unordered_map <string,fstream*> mFStreams;

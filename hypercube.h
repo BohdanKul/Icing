@@ -2,108 +2,151 @@
 #define HYPERCUBE_H
 
 #include <iostream>
-#include "unitcell.h"
+#include <iomanip>
+#include <map>
 
 using namespace std;
 
+// direction map - association between a relative direction and a number
+const map<char, int> DMap = {
+                                {'r', 0},
+                                {'d', 1},
+                                {'l', 2},
+                                {'u', 3},
+                                {'n', 4},
+                                {'p', 5}
+                            };
+
+// the inverse map - from a number to a relative direction
+const map<int, char> IDMap = {
+                                {0, 'r'},
+                                {1, 'd'},
+                                {2, 'l'},
+                                {3, 'u'},
+                                {4, 'n'},
+                                {5, 'p'}
+                             };
+
+// opposite direction map - associates with a each direction its opposite
+const map<char, char> ODMap = {
+                                {'l', 'r'},
+                                {'r', 'l'},
+                                {'u', 'd'},
+                                {'d', 'u'},
+                                {'n', 'p'},
+                                {'p', 'n'}
+                              };
+
+// the same as the previous map but in terms of numbers
+const map<int, int>  RDMap  = {
+                                {0, DMap.at(ODMap.at(IDMap.at(0)))},
+                                {1, DMap.at(ODMap.at(IDMap.at(1)))},
+                                {2, DMap.at(ODMap.at(IDMap.at(2)))},
+                                {3, DMap.at(ODMap.at(IDMap.at(3)))},
+                                {4, DMap.at(ODMap.at(IDMap.at(4)))},
+                                {5, DMap.at(ODMap.at(IDMap.at(5)))}
+                              };
+
+
+/****************************************************************************************************
+ * A class defining a lattice of a hypercube. Currently designed for 2 and 3 dimensional cases.   
+ ***************************************************************************************************/
 class HyperCube{
     private:
-        vector<UnitCell> lattice;
-        vector<pair<int, int>> boundary;  // a vector of spin pairs lying on the boundary in the z-direction
-        int X; int Y; int Z; int N;
-        int r;
-        int dim;
-        char up; char down;
-
-        void GetFullCrd(int index, int& x, int& y, int& z){ // convert a 1-d index to a 3-d coordinate
-            z = (int) index / (X*Y);
-            
-            index -= z*(X*Y);
-            y = (int) index / X;
-            
-            index -= y*X;
-            x = index;
-        };
+        int X; 
+        int Y;
+        int Z;
+        int N;              // total number of spins 
+        int S;              // number of spins on the boundary
+        int dim;            // dimensionality of the cube
+        char up; char down; // directions along which OBC are
+        void GetFullCrd(int sindex, int& x, int& y, int& z); // convert a 1-d index to a 3-d coordinate
+    
     public:
-        HyperCube(int _r, int _X, int _Y, int _Z);
+        HyperCube(int _X, int _Y, int _Z);
         char GetUp(){   return up;};
         char GetDown(){ return down;};
         int  GetSize(){ return N;};
         int  GetDim(){  return dim;};
+        int  GetBoundarySize(){ return S;};
 
-        UnitCell& GetUnitCell(int sindex){ return lattice[sindex];}; // get a unit cell by its flat index
-        vector<pair<int,int>>& GetBoundary(){ return boundary;};     // get the boundary
-
+        vector<int> GetSpinNghbs(int sindex);  // get all the neighbours of a spin
+        void GetBoundaryPair(int sindex, int& bspin, int& tspin); // get two boundary spins 
 };
 
 /****************************************************************************************************
  * A 3-d lattice class
  ***************************************************************************************************/
-HyperCube::HyperCube(int _r, int _X, int _Y, int _Z = 1){
+HyperCube::HyperCube(int _X, int _Y, int _Z){
     X = _X;
     Y = _Y;
     Z = _Z;
-    if (Z !=1 ){ dim = 3; up = 'n'; down = 'p';}
-    else       { dim = 2; up = 'u'; down = 'd';}
-
     N = X*Y*Z;
-    r = _r;
-
-    int x; int y; int z; int siteB;
-    for (auto sindex=0; sindex!=N; sindex++){
-        GetFullCrd(sindex, x, y, z);
-
-        // Construct a 3-dimensional unit cell
-        UnitCell UC(dim);
-
-        // add the right neighbour
-        siteB = z*X*Y + y*X + (x+1)%X; 
-        UC.SetNghb('r', Crd(r,siteB));
-
-        // add the left neighbour
-        if (x==0) siteB = z*X*Y + y*X + X-1;
-        else      siteB = z*X*Y + y*X + x-1; 
-        UC.SetNghb('l', Crd(r,siteB));
-
-        // add the top neighbour
-        siteB = z*X*Y + ((y+1)%Y)*X + x; 
-        UC.SetNghb('u', Crd(r,siteB));
-
-        // add the bottom neighbour
-        if (y==0) siteB = z*X*Y + (Y-1)*X + x;
-        else      siteB = z*X*Y + (y-1)*X + x;
-        UC.SetNghb('d', Crd(r,siteB));
-        
-        if (dim == 3){
-            // add a neighbour on the next depth layer
-            siteB = ((z+1)%Z)*X*Y + y*X + x;
-            UC.SetNghb('n', Crd(r,siteB));
-
-            // add a neighbour on the previous depth layer
-            if (z==0) siteB = (Z-1)*X*Y + y*X + x;
-            else      siteB = (z-1)*X*Y + y*X + x;
-            UC.SetNghb('p', Crd(r,siteB));
-        }
-        // store it in the vector
-        lattice.push_back(UC);
-    }
-
-    int siteA;
-    if (dim == 3){
-        for (auto y=0; y!=Y; y++){
-            for (auto x=0; x!=X; x++){
-                siteA =     0*X*Y + y*X + x;
-                siteB = (Z-1)*X*Y + y*X + x;
-                boundary.push_back(make_pair(siteA, siteB));
-            }
-        }
-    }
-    else{
-        for (auto x=0; x!=X; x++){
-            siteA = x;
-            siteB = X*(Y-1)+x;
-            boundary.push_back(make_pair(siteA, siteB));
-        }
-    }
+    if (Z !=1 ){ dim = 3; up = 'n'; down = 'p'; S = X*Y;}
+    else       { dim = 2; up = 'u'; down = 'd'; S = X;}
 }
+
+/****************************************************************************************************
+ * Get all the neighbours of a spin
+ ***************************************************************************************************/
+vector<int> HyperCube::GetSpinNghbs(int sindex){
+    vector<int> nghbs;
+    nghbs.resize(dim*2);
+    
+    int x; int y; int z;
+    GetFullCrd(sindex, x, y, z);
+    
+    int siteB;
+    // right neighbour
+    siteB = z*X*Y + y*X + (x+1)%X; 
+    nghbs[DMap.at('r')] = siteB;
+    
+    // left neighbour
+    if (x==0) siteB = z*X*Y + y*X + X-1;
+    else      siteB = z*X*Y + y*X + x-1; 
+    nghbs[DMap.at('l')] = siteB;
+
+    // top neighbour
+    siteB = z*X*Y + ((y+1)%Y)*X + x; 
+    nghbs[DMap.at('u')] = siteB;
+
+    // bottom neighbour
+    if (y==0) siteB = z*X*Y + (Y-1)*X + x;
+    else      siteB = z*X*Y + (y-1)*X + x;
+    nghbs[DMap.at('d')] = siteB;
+ 
+    if (dim>2){
+        // neighbour on the next depth layer
+        siteB = ((z+1)%Z)*X*Y + y*X + x;
+        nghbs[DMap.at('n')] = siteB;
+
+        // neighbour on the previous depth layer
+        if (z==0) siteB = (Z-1)*X*Y + y*X + x;
+        else      siteB = (z-1)*X*Y + y*X + x;
+        nghbs[DMap.at('p')] = siteB;
+    }
+    return nghbs;
+}
+
+/****************************************************************************************************
+ * Get two boundary spins at a flat index sindex 
+ ***************************************************************************************************/
+void HyperCube::GetBoundaryPair(int sindex, int& bspin, int& tspin){
+     bspin = sindex;
+     tspin = N-S + sindex;
+}
+
+/****************************************************************************************************
+ * Convert a flat index to a 3-dimensional coordinate
+ ***************************************************************************************************/
+void HyperCube::GetFullCrd(int sindex, int& x, int& y, int& z){ 
+     z = (int) sindex / (X*Y);
+     
+     sindex -= z*(X*Y);
+     y = (int) sindex / X;
+     
+     sindex -= y*X;
+     x = sindex;
+};
+
 #endif
