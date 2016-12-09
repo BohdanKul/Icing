@@ -6,7 +6,7 @@
 #include <iostream>
 
 #include "spins.h"
-#include "lattice.h"
+#include "hypercube.h"
 
 using namespace std;
 
@@ -17,113 +17,74 @@ using namespace std;
 
 class SimulationCell{
     protected:
-        int width; int height; int N;    // geometrical quantities of the full system
-        
         int r;                           // number of replicas
-         
-        int rep_width; int rep_height; int rep_N; // geometrical quantities of each replica
+        int rN;                          // number of spins in a replica
+        char u; char d;                  // orientation in the +1 dimension
+        int dim;
 
         Spins*  spins;                   // the spins state
         vector<pair<int, int>> boundary; // spins connectivity at the boundary between replicas
                                          // as dictated by the region A
-        
         vector<vector<int>> nghbs;       // for each index, the vector keeps track of the neighbours
 
-        void Init(int _width, int _height, Spins* _spins, vector<int> & _A);
-
         int  GetFlatCrd(int _r, int _sindex){ // get the index of a spin located at _sindex of replica r
-            return _r*rep_N + _sindex;         
+            return _r*rN + _sindex;         
         }
 
     public:
-        SimulationCell(int _width, int _height, Spins* _spins);
-        SimulationCell(int _width, int _height, Spins* _spins, vector<int>& _A);
+        SimulationCell(int _X, int _Y, int _Z, Spins* _spins, vector<int>& _A);
        
-        Spins& GetSpins(){                     // get access to the spins  
-            return *spins;
-        };
-
-        int GetSize(){                         // get the full size of simulation cell
-            return N;
-        };
-
-        vector<vector<int>>& GetLattice(){     // get access to the neighbours info 
-            return nghbs;
-        };
-
-        vector<pair<int,int>>& GetBoundary(){  // get the boundary connectivity
-            return boundary;
-        };
-
+        Spins& GetSpins(){ return *spins;};    // get access to the spins  
+        int    GetSize(){  return r*rN;};         // get the full size of simulation cell
+        int    GetDim(){   return dim;};
+        char   GetU(){     return u;};
+        char   GetD(){     return d;};
+        
+        vector<vector<int>>& GetLattice(){    return nghbs;};    // get access to the neighbours info 
+        vector<pair<int,int>>& GetBoundary(){ return boundary;}; // get the boundary connectivity
         void print();    // ugly but useful debugging routines
 };
-
-/****************************************************************************************************
- *
- ***************************************************************************************************/
-SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<int>& _A){
-    Init(_width, _height, _spins, _A);
-}
-
-/****************************************************************************************************
- *
- ***************************************************************************************************/
-SimulationCell::SimulationCell(int _width, int _height, Spins* _spins){
-    vector<int> A;
-    A.clear();
-    Init(_width, _height, _spins, A);
-}
 
 /****************************************************************************************************
  * Initialize the spins state object and build a rectangular lattice connectivity data structures 
  * required to run cluster and normal spin updates on the simulation cell. The region A determines
  * the spins connectivity at the boundary between two replicas constituing the lattice.
  ***************************************************************************************************/
-void SimulationCell::Init(int _width, int _height, Spins* _spins, vector<int>& _A){
-
+SimulationCell::SimulationCell(int _X, int _Y, int _Z, Spins* _spins, vector<int>& _A){
     spins = _spins;
-    
-    width  = _width;
-    height = _height;
-    N      = width*height;
 
-    rep_width = width;
-    rep_height = (int) height/2;
-    rep_N = rep_width*rep_height;
-
-  
-    // initialize two replicas that are not connected to 
-    // each other at first. Those are temporary data structures
-    // helping to build the full lattice.
-    vector<Rectangle> replicas;
-    replicas.push_back(Rectangle(0, rep_width, rep_height, false)); 
-    replicas.push_back(Rectangle(1, rep_width, rep_height, false)); 
+    // Initialize two replicas that are not connected to each other at first. 
+    // Those are temporary data structures helping to build the full lattice.
     r=2;
-   
-    //replicas[0].print();
-    //replicas[1].print();
-   
+    vector<HyperCube> replicas;
+    replicas.push_back(HyperCube(0, _X, _Y, _Z)); 
+    replicas.push_back(HyperCube(1, _X, _Y, _Z)); 
+    
+    rN  = replicas[0].GetSize();   
+    dim = replicas[0].GetDim(); 
+    
+    u  = replicas[0].GetUp();
+    d  = replicas[1].GetDown();
+    
+
     int bspin1; int tspin1;
     int bspin2; int tspin2;
 
 
-    for (auto i=0; i!=width; i++){
+    for (auto i=0; i!=replicas[0].GetBoundary().size(); i++){
         
         // determine the boundary spins that need to get rewired 
-        bspin1 = replicas[0].GetBoundary().at(i).first;
+        bspin1 = replicas[0].GetBoundary().at(i).first; 
         tspin1 = replicas[0].GetBoundary().at(i).second;
-        //cout << bspin1 << "," << tspin1 << endl; 
-
-        bspin2 = replicas[1].GetBoundary().at(i).first;
+        bspin2 = replicas[1].GetBoundary().at(i).first; 
         tspin2 = replicas[1].GetBoundary().at(i).second;
-        //cout << bspin2 << "," << tspin2 << endl; 
 
         // if the spins aren't part of region A, link them intra-replicas
         if (find(_A.begin(), _A.end(), bspin1)==_A.end()) {
-            replicas[0].GetUnitCell(bspin1).SetNghb('d', Crd(0, tspin1));
-            replicas[0].GetUnitCell(tspin1).SetNghb('u', Crd(0, bspin1));
-            replicas[1].GetUnitCell(bspin2).SetNghb('d', Crd(1, tspin2));
-            replicas[1].GetUnitCell(tspin2).SetNghb('u', Crd(1, bspin2));
+            replicas[0].GetUnitCell(bspin1).SetNghb(d, Crd(0, tspin1));
+            replicas[0].GetUnitCell(tspin1).SetNghb(u, Crd(0, bspin1));
+            replicas[1].GetUnitCell(bspin2).SetNghb(d, Crd(1, tspin2));
+            replicas[1].GetUnitCell(tspin2).SetNghb(u, Crd(1, bspin2));
 
             boundary.push_back(make_pair(GetFlatCrd(0, bspin1), GetFlatCrd(0, tspin1)));
             boundary.push_back(make_pair(GetFlatCrd(1, bspin2), GetFlatCrd(1, tspin2)));
@@ -131,23 +92,20 @@ void SimulationCell::Init(int _width, int _height, Spins* _spins, vector<int>& _
         }
         // otherwise, an inter-replicas links are created
         else{
-            replicas[0].GetUnitCell(bspin1).SetNghb('d', Crd(1, tspin2));
-            replicas[0].GetUnitCell(tspin1).SetNghb('u', Crd(1, bspin2));
-            replicas[1].GetUnitCell(bspin2).SetNghb('d', Crd(0, tspin1));
-            replicas[1].GetUnitCell(tspin2).SetNghb('u', Crd(0, bspin1));
+            replicas[0].GetUnitCell(bspin1).SetNghb(d, Crd(1, tspin2));
+            replicas[0].GetUnitCell(tspin1).SetNghb(u, Crd(1, bspin2));
+            replicas[1].GetUnitCell(bspin2).SetNghb(d, Crd(0, tspin1));
+            replicas[1].GetUnitCell(tspin2).SetNghb(u, Crd(0, bspin1));
          
             boundary.push_back(make_pair(GetFlatCrd(0, bspin1), GetFlatCrd(1, tspin2)));
             boundary.push_back(make_pair(GetFlatCrd(1, bspin2), GetFlatCrd(0, tspin1)));
         }
     }
 
-    //replicas[0].print();
-    //replicas[1].print();
     
-    //cout << endl << "--- Milestone 2: " << " about to build the boundary" << endl; 
     // store all the connectivity information into a flat vector
     for (auto _r=0; _r!=r; _r++){
-        for (auto _s=0; _s!=rep_N; _s++){
+        for (auto _s=0; _s!=replicas[_r].GetSize(); _s++){
             nghbs.push_back(vector<int>());
             for (auto nghb  = replicas[_r].GetUnitCell(_s).GetNghbs().begin(); 
                       nghb != replicas[_r].GetUnitCell(_s).GetNghbs().end(); 
@@ -157,9 +115,7 @@ void SimulationCell::Init(int _width, int _height, Spins* _spins, vector<int>& _
         }
     }
 
-    // At this point, the informaion contained in the replicas is redundant.
-    // Destroy them.
-    //cout << endl << "--- Milestone 3: " << " done building the boundary" << endl; 
+    // At this point, the informaion contained in the replicas is redundant.  Destroy them.
     replicas.clear();
 
 }
@@ -169,12 +125,11 @@ void SimulationCell::Init(int _width, int _height, Spins* _spins, vector<int>& _
  ***************************************************************************************************/
 void SimulationCell::print(){
     cout << endl << "--- Simulation cell state ---" << endl;
-    cout << endl << "    r: " << r << " width: " << width << " height: " << height << endl; 
     cout << endl << "   Spins state:" << endl << "   ";
     spins->print();
     
     cout << endl << "   Neighbours state: " << endl;
-    for (int i=0; i!=N; i++){
+    for (int i=0; i!=(2*rN); i++){
         cout << "   " << setfill(' ') << setw(2) << i << ": ";
         for (auto nghb=nghbs[i].begin(); nghb!=nghbs[i].end(); nghb++)
             cout << setfill(' ') << setw(2) << *nghb << " ";

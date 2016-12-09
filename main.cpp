@@ -13,7 +13,6 @@
 #include <boost/filesystem.hpp>
 
 #include "spins.h"
-#include "lattice.h"
 #include "simulationcell.h"
 #include "subroutines.h"
 #include "communicator.h"
@@ -31,21 +30,26 @@ int main(int argc, char *argv[]){
     po::options_description SimulationOptions("Simulation options");
     SimulationOptions.add_options()
         ("help,h",  "produce help message")
-        ("seed, s", po::value<long>()->default_value(0),   "random generator seed")
-        ("meas, m", po::value<int>(),                      "number of measurements (bins) to take")
-        ("binsize", po::value<int>()->default_value(100),  "number of MC sweeps per bin")
+        ("seed, s", po::value<long>()->default_value(0),    "random generator seed")
+        ("meas, m", po::value<int>(),                       "number of measurements (bins) to take")
+        ("binsize", po::value<int>()->default_value(100),   "number of MC sweeps per bin")
+        ("state",   po::value<string>()->default_value(""), "path to the state file")
         ;
-    
+   
+    bool snake_tiling; 
     po::options_description PhysicalOptions("Physical options");
     PhysicalOptions.add_options()
-        ("beta,   b",         po::value<double>()->default_value(beta_c),  
-                                                  "inverse temperature")
-        ("signJ,  J",         po::value<int>()->default_value(1),   
-                                                  "ferromagnetic (+1) or antiferromagnetic (-1) coupling")
-        ("width,  w",         po::value<int>(),   "lattice width")
-        ("height, h",         po::value<int>(),   "lattice height")
-        ("A, A",              po::value<int>(),   "region A widht")
-        ("Ap, P",             po::value<int>(),   "region A prime width")
+        ("beta,   b", po::value<double>(),  "inverse temperature")
+        ("T,      T", po::value<double>(),  "temperature")
+        ("signJ,  J", po::value<int>()->default_value(-1),         "ferromagnetic (-1) or antiferromagnetic (+1) coupling")
+        ("X, X",      po::value<int>(),                            "lattice X")
+        ("Y, Y",      po::value<int>(),                            "lattice Y")
+        ("Z, Z",      po::value<int>(),                            "lattice Z") 
+        ("snake",     po::bool_switch(&snake_tiling)->default_value(false),"snake-like build up of region A") 
+        ("Ax",        po::value<int>(),                            "region A width")
+        ("Ay",        po::value<int>()->default_value(1),          "region A height")
+        ("APx",       po::value<int>(),                            "region A prime width")
+        ("APy",       po::value<int>()->default_value(1),          "region A prime height")
         ;
 
     po::options_description cmdLineOptions("Command line options");
@@ -81,12 +85,14 @@ int main(int argc, char *argv[]){
    
     // beta
     double beta   = 0.0;
-    if (not(params.count("beta"))){
-        cerr << "Error: define the inverse temperature (beta)" << endl;
+    if (not(params.count("beta")) and not(params.count("T"))){
+        cerr << "Error: define the temperature (beta or T)" << endl;
         return 1;
     }
-    else 
-        beta = params["beta"].as<double>();
+    else{
+        if (params.count("beta")) beta = params["beta"].as<double>();
+        else                      beta = 1.0/params["T"].as<double>();
+    }
 
     // sign J
     int signJ;
@@ -105,92 +111,140 @@ int main(int argc, char *argv[]){
     }
 
     // lattice
-    int width;
-    int height;
-    if (not(params.count("width")) or not(params.count("height"))){
-        cerr << "Error: define lattice dimensions (width, height)" << endl;
+    int X;
+    int Y;
+    int Z;
+
+    if (not(params.count("X")) or not(params.count("Y")) or not(params.count("Z"))){
+        cerr << "Error: define lattice dimensions (X, Y, Z)" << endl;
         return 1;
     }
     else{
-        width  = params["width"].as<int>();
-        height = params["height"].as<int>();
+        X = params["X"].as<int>();
+        Y = params["Y"].as<int>();
+        Z = params["Z"].as<int>();
     }
 
     // region A
-    int A_size;
-    int Ap_size;
-    if (not(params.count("beta"))){
-        cerr << "Error: define the inverse temperature (beta)" << endl;
+    int Ax;
+    int Ay;
+    int APx;
+    int APy;
+    if (not(params.count("Ax")) or not(params.count("APx"))){
+        cerr << "Error: define the entangled regions (Ax, Ay, APx, APy)" << endl;
         return 1;
     }
     else{ 
-        A_size   = params["A"].as<int>();
-        Ap_size = params["Ap"].as<int>();
+        Ax  = params["Ax"].as<int>();
+        Ay  = params["Ay"].as<int>();
+        APx = params["APx"].as<int>();
+        APy = params["APy"].as<int>();
     }
 
 
 
     // Define physical constants --------------------------------------------------------
-    int   N      = width * height;
+    int   N      = X * Y * Z;
     int   reps   = 2;
 
     // Initialize random objects --------------------------------------------------------
-    vector<double> probTable = {1, exp(-4.0*beta), exp(-8.0*beta)};
-    
-    //double Sum = 0;
-    //for (auto pe=probTable.begin(); pe!=probTable.end(); pe++)
-    //    Sum += *pe;
-    //
-    //for (auto pe=probTable.begin(); pe!=probTable.end(); pe++){
-    //    *pe = *pe/Sum;
-    //    cout << *pe << endl;
-    //}
+    vector<double> probTable = {1, exp(-4.0*beta), exp(-8.0*beta), exp(-12.0*beta)};
 
     boo::mt19937 engine(seed);
-    boo::uniform_int<uint64_t> UDInt(0, N-1); 
+    boo::uniform_int<uint64_t> UDInt(0, reps*N-1); 
     boo::uniform_real<double>  UDReal(0,1);
-    boo::variate_generator<boo::mt19937&, boo::uniform_int<uint64_t> > RandInt( engine, UDInt );
-    boo::variate_generator<boo::mt19937&, boo::uniform_real<double> >   RandReal(engine, UDReal);
-    
-    
-    // Initialize a spins state ---------------------------------------------------------
-    Spins spins;
-    for (int i=0; i!=width*height; i++){
-        spins.Add((RandInt()%2)*2-1);
-    }
-    //spins.print();
-
-    
-    // Initialize region A and A', dA = A - A' (A' is always assummed to be larger)
-    vector<int> A;
-    vector<int> Ap;
-    vector<int> dA;
-    A.clear(); Ap.clear(); dA.clear();
-    for (auto i=0;      i!=A_size;  i++) A.push_back(i);
-    for (auto i=0;      i!=Ap_size; i++) Ap.push_back(i);
-    for (auto i=A_size; i!=Ap_size; i++) dA.push_back(i);
+    boo::variate_generator<boo::mt19937&, boo::uniform_int<uint64_t>> RandInt( engine, UDInt );
+    boo::variate_generator<boo::mt19937&, boo::uniform_real<double> > RandReal(engine, UDReal);
    
-     
-    // Initialize the main simulation cell corresponding to the region A --------------------
-    SimulationCell SC(width, height, &spins, A);
-    //SC.print();
-   
-    // Also initilize the simulation cell based on the region A'. It is used as a A'-BCs builder
-    SimulationCell SCP(width, height, &spins, Ap);
-    //SCP.print();
-    
-    // Initialize the cluster builders -------------------
-    ClusterBuilder CB(SC, SCP,  beta, signJ, RandReal); 
-    
-
-    
     // Initialize file objects ----------------------------------------------------------
-    Communicator communicator(reps, width, height, A_size, Ap_size, beta, seed);
+    int NA; int NAP;
+    if (snake_tiling){ NA  = Ax;    NAP = APx; }
+    else{              NA  = Ax*Ay; NAP = APx*APy; }
+
+    Communicator communicator(params["state"].as<string>(), reps, X, Y, Z, NA, NAP, beta, seed);
     string eHeader = "";
     eHeader += boo::str(boo::format("#%15s%16s%16s")%"ET/N"%"Z_Ap/Z_A"%"Z_Ap/Z_A2"); 
     *communicator.stream("estimator")<< eHeader << endl; 
     long ID = communicator.getId();
 
+ 
+    // The spins object
+    Spins spins;
+    
+    // If restarting from a previously saved state, load the RN generator engine and spins states.
+    if (params["state"].as<string>() != ""){
+        // Buffer variables 
+        string        sBuf;
+        stringstream ssBuf;
+
+        // Reset the distributions' state
+         RandInt.distribution().reset();
+        RandReal.distribution().reset();
+    
+        // Load the engine    
+        getline(*communicator.stream("state"), sBuf);
+        ssBuf << sBuf;
+        ssBuf >> engine; 
+        
+        // Load the spins state
+        istringstream issBuf;
+        getline(*communicator.stream("state"), sBuf);
+        issBuf.str(sBuf);
+        int ispin;
+        while (issBuf >> ispin){
+            spins.Add(ispin);
+        }
+    }
+    // Otherwise, initialize the spins state to random values
+    else{
+        for (int i=0; i!=N*reps; i++) 
+            spins.Add((RandInt()%2)*2-1);
+    }
+    
+    
+    // Initialize region A and A', dA = A - A' (A' is always assummed to be larger)
+    vector<int> A;  A.clear(); 
+    vector<int> Ap; Ap.clear();
+    vector<int> dA; dA.clear();
+    
+    // For the snake-like build up of region A, spins are added strip by strip until the number
+    // specified by Ax or Apx is reached
+    if (snake_tiling){
+        for (auto x=0; x!=Ax;  x++) A.push_back(x);
+        for (auto x=0; x!=APx; x++) Ap.push_back(x);
+    }
+    // Otherwise, the spins which lie within the square boundaries defined by (Ax, Ay) pair are added.
+    else{
+        for (auto y=0; y!=Ay; y++){
+            for (auto x=0; x!=Ax; x++){
+                A.push_back(y*X + x);
+            }
+        }
+        for (auto y=0; y!=APy; y++){
+            for (auto x=0; x!=APx; x++){
+                Ap.push_back(y*X + x);
+            }
+        }
+    }
+    
+    // Remember the difference between the two regions
+    for (auto a=Ap.begin(); a!=Ap.end(); a++){
+        if (find(A.begin(), A.end(), *a)==A.end()){
+            dA.push_back(*a);
+        }
+    }
+
+    // Initialize the main simulation cell corresponding to the region A --------------------
+    SimulationCell SC(X, Y, Z, &spins, A);
+    //SC.print();
+   
+    // Also initilize the simulation cell based on the region A'. It is used as a A'-BCs builder
+    SimulationCell SCP(X, Y, Z, &spins, Ap);
+    //SCP.print();
+    
+    // Initialize the cluster builders -------------------
+    ClusterBuilder CB(SC, SCP,  beta, signJ, RandReal); 
+    
 
     // Start the main MC loop -----------------------------------------------------------
     int initSpin;
@@ -214,6 +268,7 @@ int main(int argc, char *argv[]){
            
             CB.ResetPartition();
             CB.FlipTraceCluster(0, initSpin);
+            //CB.CrumbTraceCluster(0, initSpin);
             //int t=0;
             //for (auto s=CB.GetPartition().begin(); s!=CB.GetPartition().end(); s++){
             //    if (*s != -1)
@@ -282,11 +337,24 @@ int main(int argc, char *argv[]){
             ZR2 += pow(2, NCP-NCA);
         }
         
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(signJ*ET/(1.0*binSize*N)));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(signJ*ET/(1.0*binSize*reps*N)));
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR /(1.0*binSize)));
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR2/(1.0*binSize)));
         *communicator.stream("estimator") << endl;    
         
+    
+        // Save the state. 
+        // Reseting the distributions state doesn't interfer with the ongoing generation of RNs.
+        // However, it is required for a proper restart. 
+         RandInt.distribution().reset();
+        RandReal.distribution().reset();
+        communicator.reset("state");
+        *communicator.stream("state") << engine << endl;
+        
+        for (auto k=0; k!=SC.GetSize(); k++)
+            *communicator.stream("state") << SC.GetSpins().Get(k) << " ";
+        *communicator.stream("state") << endl;    
+     
         cout << ID << ": Measurement taken" << endl;
     }
     return 0;

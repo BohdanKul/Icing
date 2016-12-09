@@ -38,6 +38,8 @@ const map<char, int> DMap = {
                                 {'d', 1},
                                 {'l', 2},
                                 {'u', 3},
+                                {'n', 4},
+                                {'p', 5}
                             };
 
 // the inverse map - from a number to a relative direction
@@ -45,7 +47,9 @@ const map<int, char> IDMap = {
                                 {0, 'r'},
                                 {1, 'd'},
                                 {2, 'l'},
-                                {3, 'u'}
+                                {3, 'u'},
+                                {4, 'n'},
+                                {5, 'p'}
                              };
 
 // opposite direction map - associates with a each direction its opposite
@@ -53,7 +57,9 @@ const map<char, char> ODMap = {
                                 {'l', 'r'},
                                 {'r', 'l'},
                                 {'u', 'd'},
-                                {'d', 'u'}
+                                {'d', 'u'},
+                                {'n', 'p'},
+                                {'p', 'n'}
                               };
 
 // the same as the previous map but in terms of numbers
@@ -61,7 +67,9 @@ const map<int, int>  RDMap  = {
                                 {0, DMap.at(ODMap.at(IDMap.at(0)))},
                                 {1, DMap.at(ODMap.at(IDMap.at(1)))},
                                 {2, DMap.at(ODMap.at(IDMap.at(2)))},
-                                {3, DMap.at(ODMap.at(IDMap.at(3)))}
+                                {3, DMap.at(ODMap.at(IDMap.at(3)))},
+                                {4, DMap.at(ODMap.at(IDMap.at(4)))},
+                                {5, DMap.at(ODMap.at(IDMap.at(5)))}
                               };
 
 /****************************************************************************************************
@@ -70,10 +78,11 @@ const map<int, int>  RDMap  = {
 class UnitCell{
     protected:
         vector<Crd>   nghbs; // all neighbours coordinates
-
+        int d;               // dimensionality 
     public:
-        UnitCell(){
-            nghbs.resize(4);
+        UnitCell(int _d=3){
+            d = _d;
+            nghbs.resize(d*2);
         }
         
         void SetNghb(char rel_pos, Crd _crd){  // add a new neigbour

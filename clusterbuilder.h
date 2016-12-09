@@ -23,6 +23,7 @@ class ClusterBuilder{
     protected:
         double P;                       // derived probability of a link activation
         int signJ ;                     // the sign of the Hamiltonian (1 for the ferromagnetic) 
+        int dim;
         SimulationCell& SC;             // used for the spins state, lattice and BCs
         SimulationCell& SCP;            // used for the BCs
         vector<int> Cluster_Partition;  // employed during cluster building to mark spins according to
@@ -64,7 +65,8 @@ ClusterBuilder::ClusterBuilder(SimulationCell& _SC, SimulationCell& _SCP, double
     signJ   = _signJ;
 
     Cluster_Partition.resize(SC.GetSize());
-    Links_State.resize(SC.GetSize()*4);
+    dim = SC.GetDim();
+    Links_State.resize(SC.GetSize()*2*dim);
     ResetPartition();
     ResetLinks();
 }
@@ -124,30 +126,30 @@ bool ClusterBuilder::CrumbTraceCluster(int ncluster, int nspin){
             RN = RealRnd();
             if (Cluster_Partition[*nghb] == -1){
                 if (RN < P){
-                    Links_State[4* nspin + i]          = 2;
-                    Links_State[4*(*nghb)+RDMap.at(i)] = 2; 
+                    Links_State[2*dim*nspin + i]           = 2;
+                    Links_State[2*dim*(*nghb)+RDMap.at(i)] = 2; 
                     CrumbTraceCluster(ncluster, *nghb); 
                 }
                 else{
-                    Links_State[4* nspin + i]          = 1;
-                    Links_State[4*(*nghb)+RDMap.at(i)] = 1; 
+                    Links_State[2*dim*nspin + i]           = 1;
+                    Links_State[2*dim*(*nghb)+RDMap.at(i)] = 1; 
                 }
             }
             // activate the link (it is possible that it wasn't activated before) 
-            else if ((Cluster_Partition[*nghb] == ncluster) and (Links_State[4*nspin+i] == 0)){ 
+            else if ((Cluster_Partition[*nghb] == ncluster) and (Links_State[2*dim*nspin+i] == 0)){ 
                 if (RN < P){
-                    Links_State[4* nspin + i]          = 2;
-                    Links_State[4*(*nghb)+RDMap.at(i)] = 2; 
+                    Links_State[2*dim*nspin + i]           = 2;
+                    Links_State[2*dim*(*nghb)+RDMap.at(i)] = 2; 
                 }
                 else{
-                    Links_State[4* nspin + i]          = 1;
-                    Links_State[4*(*nghb)+RDMap.at(i)] = 1; 
+                    Links_State[2*dim*nspin + i]           = 1;
+                    Links_State[2*dim*(*nghb)+RDMap.at(i)] = 1; 
                 }
             }
         }
         else{
-             Links_State[4* nspin + i]          = 1;
-             Links_State[4*(*nghb)+RDMap.at(i)] = 1; 
+             Links_State[2*dim*nspin + i]           = 1;
+             Links_State[2*dim*(*nghb)+RDMap.at(i)] = 1; 
         }
         i += 1;
     }
@@ -170,7 +172,7 @@ bool ClusterBuilder::EatCrumbs(int ncluster, int nspin){
     Cluster_Partition[nspin] = ncluster;
     int i = 0;
     for (auto nghb  = SCP.GetLattice().at(nspin).begin(); nghb != SCP.GetLattice().at(nspin).end(); nghb++){
-        if  ((Cluster_Partition[*nghb] == -1) and (Links_State[4*nspin+i]==2)){
+        if  ((Cluster_Partition[*nghb] == -1) and (Links_State[2*dim*nspin+i]==2)){
                 EatCrumbs(ncluster, *nghb); 
         }
         i += 1;
@@ -196,14 +198,13 @@ void ClusterBuilder::ReconnectLinks(vector<int>& dA){
         
         // Set the activation of bottom spins in the downward direction.
         // This corresponds to keeping the upward links on the top spins. 
-        Links_State[4*bspin1+DMap.at('d')] = Links_State[4*tspin2+DMap.at('u')];
-        Links_State[4*bspin2+DMap.at('d')] = Links_State[4*tspin1+DMap.at('u')];
-        
+        Links_State[2*dim*bspin1+DMap.at(SC.GetD())] = Links_State[2*dim*tspin2+DMap.at(SC.GetU())];
+        Links_State[2*dim*bspin2+DMap.at(SC.GetD())] = Links_State[2*dim*tspin1+DMap.at(SC.GetU())];
         
         // Alternatively, set the activation in the reverse order. Either choice works.
         // Each one corresponds to setting the direction of the imaginary time axis.
-        //Links_State[4*tspin1+DMap.at('u')] = Links_State[4*bspin2+DMap.at('d')];
-        //Links_State[4*tspin2+DMap.at('u')] = Links_State[4*bspin1+DMap.at('d')];
+        //Links_State[2*dim*tspin1+DMap.at('u')] = Links_State[2*dim*bspin2+DMap.at('d')];
+        //Links_State[2*dim*tspin2+DMap.at('u')] = Links_State[2*dim*bspin1+DMap.at('d')];
     }
 
 }
