@@ -10,7 +10,7 @@ os.chdir('OUTPUT')
 fileNames = os.popen('ls -1 estimator-*' ).read().split('\n')
 fileNames.pop()
 
-sublist = []
+d = {}
 for fname in fileNames:
     sfile   =  'state'+fname[9:]
     if (os.path.exists(sfile+'a')):
@@ -25,10 +25,12 @@ for fname in fileNames:
 
     L = fname.split('-')
     subcommand = "--X %3d --Y % 3d --Z %3d --Ax %03d --Ay 0 --APx %03d --APy 0" %tuple(map(int, L[2:7]))
-    subcommand += " --seed %d " %int(L[8][1:])
+    seed = int(L[8][1:])
+    subcommand += " --seed %d " %seed
     subcommand += " --state OUTPUT/%s" %sfile
 
-    sublist += [subcommand]
+    if (seed in d.keys()): d[seed] += [subcommand]
+    else:                  d[seed]  = [subcommand]
 
 #switch back to folder we used to be
 os.chdir(CurrentFolder)
@@ -38,8 +40,11 @@ scriptFile = open(fileName,'w')
 scriptFile.write('''#!/bin/bash\n\n''')
 
 # Create the command string and output to submit file
-for subcommand in sublist:
-    scriptFile.write('sqsub -q NAP_8998 -o output -e output --mpp=1G -r 7d ../../main.so %s --snake --meas 10000 --signJ -1 --beta 0.22165\n' %(subcommand))
+
+for seed in d.keys().sort():
+    for subcommand in d[seed]:
+        scriptFile.write('sqsub -q NAP_8998 -o output -e output --mpp=1G -r 7d ../../main.so %s --snake --meas 10000 --signJ -1 --beta 0.22165\n' %(subcommand))
+    scriptFile.write('\n')
 
 scriptFile.close()
 os.system('chmod u+x %s'%fileName)
