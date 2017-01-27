@@ -15,10 +15,10 @@ Communicator::Communicator(string rfName, int _r, int _X, int _Y, int _Z, int _s
     p = _p;
      
     // Build the filename 
-    dataName = str(format("%02d-%03d-%03d-%03d-%03d-%03d-b%06.3f") %_r %_X %_Y %_Z %_sizeA %_sizeAp %_beta);
+    dataName = str(format("%02d-%03d-%03d-%03d-%03d-%03d-t%06.3f") %_r %_X %_Y %_Z %_sizeA %_sizeAp %(1.0/_beta));
     dataName +=str(format("-p%05d") %_p);
 
-    types  = vector<string> {"estimator", "state"};
+    types  = vector<string> {"estimator", "state", "spins"};
     outDir = "OUTPUT"; 
     
     // Generate id
