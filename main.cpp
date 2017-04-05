@@ -38,14 +38,17 @@ int main(int argc, char *argv[]){
     
     po::options_description PhysicalOptions("Physical options");
     PhysicalOptions.add_options()
-        ("beta,   b",         po::value<double>()->default_value(beta_c),  
-                                                  "inverse temperature")
+        //("beta,   b",         po::value<double>()->default_value(beta_c),  
+        //                                          "inverse temperature")
+        ("T",                 po::value<double>(), "temperature")
         ("signJ,  J",         po::value<int>()->default_value(1),   
                                                   "ferromagnetic (+1) or antiferromagnetic (-1) coupling")
         ("width,  w",         po::value<int>(),   "lattice width")
         ("height, h",         po::value<int>(),   "lattice height")
-        ("A, A",              po::value<int>(),   "region A widht")
-        ("Ap, P",             po::value<int>(),   "region A prime width")
+        ("A, A",              po::value<int>()->default_value(0),
+                                                   "region A widht")
+        ("Ap, P",             po::value<int>()->default_value(0),
+                                                   "region A prime width")
         ;
 
     po::options_description cmdLineOptions("Command line options");
@@ -79,14 +82,25 @@ int main(int argc, char *argv[]){
         seed = params["seed"].as<long>();
 
    
-    // beta
+    //// beta
     double beta   = 0.0;
-    if (not(params.count("beta"))){
-        cerr << "Error: define the inverse temperature (beta)" << endl;
+    //if (not(params.count("beta"))){
+    //    cerr << "Error: define the inverse temperature (beta)" << endl;
+    //    return 1;
+    //}
+    //else 
+    //    beta = params["beta"].as<double>();
+
+    // temperature 
+    double T   = 0.0;
+    if (not(params.count("T"))){
+        cerr << "Error: define a temperature (T)" << endl;
         return 1;
     }
     else 
-        beta = params["beta"].as<double>();
+        T = params["T"].as<double>();
+    beta = 1.0/T;
+    
 
     // sign J
     int signJ;
@@ -116,23 +130,9 @@ int main(int argc, char *argv[]){
         height = params["height"].as<int>();
     }
 
-    // region A
-    int A_size;
-    int Ap_size;
-    if (not(params.count("beta"))){
-        cerr << "Error: define the inverse temperature (beta)" << endl;
-        return 1;
-    }
-    else{ 
-        A_size   = params["A"].as<int>();
-        Ap_size = params["Ap"].as<int>();
-    }
-
-
-
     // Define physical constants --------------------------------------------------------
     int   N      = width * height;
-    int   reps   = 2;
+    int   reps   = 1;
 
     // Initialize random objects --------------------------------------------------------
     vector<double> probTable = {1, exp(-4.0*beta), exp(-8.0*beta)};
@@ -162,6 +162,8 @@ int main(int argc, char *argv[]){
 
     
     // Initialize region A and A', dA = A - A' (A' is always assummed to be larger)
+    int A_size   = params["A"].as<int>();
+    int Ap_size = params["Ap"].as<int>();
     vector<int> A;
     vector<int> Ap;
     vector<int> dA;
@@ -175,19 +177,16 @@ int main(int argc, char *argv[]){
     SimulationCell SC(width, height, &spins, A);
     //SC.print();
    
-    // Also initilize the simulation cell based on the region A'. It is used as a A'-BCs builder
-    SimulationCell SCP(width, height, &spins, Ap);
-    //SCP.print();
-    
+   
     // Initialize the cluster builders -------------------
-    ClusterBuilder CB(SC, SCP,  beta, signJ, RandReal); 
+    ClusterBuilder CB(SC, beta, signJ, RandReal); 
     
 
     
     // Initialize file objects ----------------------------------------------------------
-    Communicator communicator(reps, width, height, A_size, Ap_size, beta, seed);
+    Communicator communicator(reps, width, height, A_size, Ap_size, T, seed);
     string eHeader = "";
-    eHeader += boo::str(boo::format("#%15s%16s%16s")%"ET/N"%"Z_Ap/Z_A"%"Z_Ap/Z_A2"); 
+    eHeader += boo::str(boo::format("#%15s%16s%16s%16s%16s")%"e"%"e2"%"m"%"m2"%"|m|"); 
     *communicator.stream("estimator")<< eHeader << endl; 
     long ID = communicator.getId();
 
@@ -197,12 +196,16 @@ int main(int argc, char *argv[]){
     int spinA; 
     int EF;
     double debug = false;
-    long  ET;
+    long  ET; long E2T;           long _ET;
+    long  MT; long M2T; long aMT; long _MT;
     double ZR;
     double ZR2;
     double RN=0;
     for (auto i=0; i!=Nmeas; i++){
-        ET = 0; ZR = 0; ZR2 = 0;
+        ET = 0; E2T = 0; 
+        MT = 0; M2T = 0; 
+       aMT = 0; 
+        ZR = 0; ZR2 = 0;  
         for (auto j=0; j!=binSize; j++){
             if (debug) cout << "--- " << i << " " << j << endl;
             
@@ -242,49 +245,28 @@ int main(int argc, char *argv[]){
             }
 
             // Perform measurements --------------------------------------------------------
-            ET += GetEnergy(SC);
-            //ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP) - GetBoundaryEnergy(SC)));
-            
-            ZR += exp(-beta*signJ*( GetBoundaryEnergy(SCP, dA) - GetBoundaryEnergy(SC, dA)));
-            
-            int bspin1; int bspin2;
-            int tspin1; int tspin2;
-            int NCA = 0;
-            CB.ResetPartition();
-            CB.ResetLinks();
-            for (auto k=dA.begin(); k!=dA.end(); k++){
-                bspin1 = SC.GetBoundary()[2*(*k)  ].first; 
-                tspin1 = SC.GetBoundary()[2*(*k)  ].second;
-                bspin2 = SC.GetBoundary()[2*(*k)+1].first; 
-                tspin2 = SC.GetBoundary()[2*(*k)+1].second;
-                
-                if (CB.CrumbTraceCluster(NCA, bspin1)==true) NCA +=1; 
-                if (CB.CrumbTraceCluster(NCA, tspin1)==true) NCA +=1;
-                if (CB.CrumbTraceCluster(NCA, bspin2)==true) NCA +=1; 
-                if (CB.CrumbTraceCluster(NCA, tspin2)==true) NCA +=1;
-            }
-            CB.ReconnectLinks(dA);
-            CB.ResetPartition();
+            GetEnergyMagnetization(SC, _ET, _MT);
+            ET  += _ET;
+            E2T += _ET*_ET;
 
-            int NCP = 0;
-            for (auto k=dA.begin(); k!=dA.end(); k++){
-                bspin1 = SCP.GetBoundary()[2*(*k)  ].first; 
-                tspin1 = SCP.GetBoundary()[2*(*k)  ].second;
-                bspin2 = SCP.GetBoundary()[2*(*k)+1].first; 
-                tspin2 = SCP.GetBoundary()[2*(*k)+1].second;
-                
-                if (CB.EatCrumbs(NCP, bspin1)==true) NCP +=1; 
-                if (CB.EatCrumbs(NCP, tspin1)==true) NCP +=1;
-                if (CB.EatCrumbs(NCP, bspin2)==true) NCP +=1; 
-                if (CB.EatCrumbs(NCP, tspin2)==true) NCP +=1;
-            }
+            MT  += _MT;
+            M2T += _MT*_MT;
+            aMT += labs(_MT);
 
-            ZR2 += pow(2, NCP-NCA);
+            //cout << " Magnetization: " << _MT << " cumulative: " << MT << endl;
+            //for (auto k=0; k!=SC.GetSize(); k++){
+            //     cout << SC.GetSpins().Get(k) << " ";
+            //}
+            //cout << endl;
+
+
         }
         
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(signJ*ET/(1.0*binSize*N)));
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR /(1.0*binSize)));
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ZR2/(1.0*binSize)));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(signJ*ET / ( 1.0*binSize*N   )));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(     E2T / ( 1.0*binSize*N*N )));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(      MT / ( 1.0*binSize*N   )));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(     M2T / ( 1.0*binSize*N*N )));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(     aMT / ( 1.0*binSize*N   )));
         *communicator.stream("estimator") << endl;    
         
         cout << ID << ": Measurement taken" << endl;

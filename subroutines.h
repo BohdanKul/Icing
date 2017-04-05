@@ -25,18 +25,22 @@ int GetEffectiveField(SimulationCell& SC, int ispin){
 /****************************************************************************************************
 * Get the total energy (up to J constant)
  ****************************************************************************************************/
-int GetEnergy(SimulationCell& SC){
-    int energy = 0; 
+void GetEnergyMagnetization(SimulationCell& SC, long& energy, long& magnetization){
+
+    energy        = 0;
+    magnetization = 0;
 
     int istate = 0;
     for (int ispin=0; ispin!=SC.GetSize(); ispin++){
         istate = SC.GetSpins().Get(ispin);
+        magnetization = magnetization + (long) istate;
         for (auto jspin =SC.GetLattice().at(ispin).begin(); 
                   jspin!=SC.GetLattice().at(ispin).end(); 
                   jspin++)
-            energy += istate*SC.GetSpins().Get(*jspin);
-    } 
-    return (int) energy/2; // divide by 2 to compensate for the double counting  
+            energy        += istate*SC.GetSpins().Get(*jspin);
+    }
+
+    energy = (int) energy/2; // divide by 2 to compensate for the double counting  
 }
 
 /****************************************************************************************************

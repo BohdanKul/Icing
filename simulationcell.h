@@ -31,10 +31,6 @@ class SimulationCell{
 
         void Init(int _width, int _height, Spins* _spins, vector<int> & _A);
 
-        int  GetFlatCrd(int _r, int _sindex){ // get the index of a spin located at _sindex of replica r
-            return _r*rep_N + _sindex;         
-        }
-
     public:
         SimulationCell(int _width, int _height, Spins* _spins);
         SimulationCell(int _width, int _height, Spins* _spins, vector<int>& _A);
@@ -87,74 +83,21 @@ void SimulationCell::Init(int _width, int _height, Spins* _spins, vector<int>& _
     height = _height;
     N      = width*height;
 
-    rep_width = width;
-    rep_height = (int) height/2;
-    rep_N = rep_width*rep_height;
-
-  
     // initialize two replicas that are not connected to 
     // each other at first. Those are temporary data structures
     // helping to build the full lattice.
     vector<Rectangle> replicas;
-    replicas.push_back(Rectangle(0, rep_width, rep_height, false)); 
-    replicas.push_back(Rectangle(1, rep_width, rep_height, false)); 
-    r=2;
+    replicas.push_back(Rectangle(0, width, height, false)); 
    
-    //replicas[0].print();
-    //replicas[1].print();
    
-    int bspin1; int tspin1;
-    int bspin2; int tspin2;
-
-
-    for (auto i=0; i!=width; i++){
-        
-        // determine the boundary spins that need to get rewired 
-        bspin1 = replicas[0].GetBoundary().at(i).first;
-        tspin1 = replicas[0].GetBoundary().at(i).second;
-        //cout << bspin1 << "," << tspin1 << endl; 
-
-        bspin2 = replicas[1].GetBoundary().at(i).first;
-        tspin2 = replicas[1].GetBoundary().at(i).second;
-        //cout << bspin2 << "," << tspin2 << endl; 
-
-        // if the spins aren't part of region A, link them intra-replicas
-        if (find(_A.begin(), _A.end(), bspin1)==_A.end()) {
-            replicas[0].GetUnitCell(bspin1).SetNghb('d', Crd(0, tspin1));
-            replicas[0].GetUnitCell(tspin1).SetNghb('u', Crd(0, bspin1));
-            replicas[1].GetUnitCell(bspin2).SetNghb('d', Crd(1, tspin2));
-            replicas[1].GetUnitCell(tspin2).SetNghb('u', Crd(1, bspin2));
-
-            boundary.push_back(make_pair(GetFlatCrd(0, bspin1), GetFlatCrd(0, tspin1)));
-            boundary.push_back(make_pair(GetFlatCrd(1, bspin2), GetFlatCrd(1, tspin2)));
-            
-        }
-        // otherwise, an inter-replicas links are created
-        else{
-            replicas[0].GetUnitCell(bspin1).SetNghb('d', Crd(1, tspin2));
-            replicas[0].GetUnitCell(tspin1).SetNghb('u', Crd(1, bspin2));
-            replicas[1].GetUnitCell(bspin2).SetNghb('d', Crd(0, tspin1));
-            replicas[1].GetUnitCell(tspin2).SetNghb('u', Crd(0, bspin1));
-         
-            boundary.push_back(make_pair(GetFlatCrd(0, bspin1), GetFlatCrd(1, tspin2)));
-            boundary.push_back(make_pair(GetFlatCrd(1, bspin2), GetFlatCrd(0, tspin1)));
-        }
-    }
-
-    //replicas[0].print();
-    //replicas[1].print();
-    
-    //cout << endl << "--- Milestone 2: " << " about to build the boundary" << endl; 
     // store all the connectivity information into a flat vector
-    for (auto _r=0; _r!=r; _r++){
-        for (auto _s=0; _s!=rep_N; _s++){
-            nghbs.push_back(vector<int>());
-            for (auto nghb  = replicas[_r].GetUnitCell(_s).GetNghbs().begin(); 
-                      nghb != replicas[_r].GetUnitCell(_s).GetNghbs().end(); 
-                      nghb++)
-                nghbs[GetFlatCrd(_r, _s)].push_back(GetFlatCrd(nghb->GetRep(), nghb->GetInd()));
+    for (auto _s=0; _s!=N; _s++){
+        nghbs.push_back(vector<int>());
+        for (auto nghb  = replicas[0].GetUnitCell(_s).GetNghbs().begin(); 
+                  nghb != replicas[0].GetUnitCell(_s).GetNghbs().end(); 
+                  nghb++)
+            nghbs[_s].push_back(nghb->GetInd());
 
-        }
     }
 
     // At this point, the informaion contained in the replicas is redundant.
