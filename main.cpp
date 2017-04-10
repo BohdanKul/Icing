@@ -215,8 +215,8 @@ int main(int argc, char *argv[]){
             
             initSpin = RandInt() ; // pick randomly the initial spin
            
-            CB.ResetPartition();
-            CB.FlipTraceCluster(0, initSpin);
+            //CB.ResetPartition();
+            //CB.FlipTraceCluster(0, initSpin);
             //int t=0;
             //for (auto s=CB.GetPartition().begin(); s!=CB.GetPartition().end(); s++){
             //    if (*s != -1)
