@@ -11,7 +11,7 @@ using namespace std;
  ***************************************************************************************************/
 class Spins{
     protected:
-        vector<int> state;
+        vector<double> state;
         int N;
 
     public:
@@ -22,17 +22,17 @@ class Spins{
             state.resize(N, 0);
         };
 
-        int Get(int index){            // get the state of a spin at index
+        double Get(int index){            // get the state of a spin at index
             return state[index];
         };
 
         int GetSize(){ return N;};     // get the size (not that it matters..)
         
-        void Set(int index, int spin){ // set the spin value at index
+        void Set(int index, double spin){ // set the spin value at index
             state[index] = spin;
         };
 
-        void Add(int spin){            // add a new spin
+        void Add(double spin){            // add a new spin
             state.push_back(spin);
             N += 1;
         };

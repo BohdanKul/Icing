@@ -24,16 +24,13 @@ class SimulationCell{
         int rep_width; int rep_height; int rep_N; // geometrical quantities of each replica
 
         Spins*  spins;                   // the spins state
-        vector<pair<int, int>> boundary; // spins connectivity at the boundary between replicas
-                                         // as dictated by the region A
         
         vector<vector<int>> nghbs;       // for each index, the vector keeps track of the neighbours
 
-        void Init(int _width, int _height, Spins* _spins, vector<int> & _A);
+        void Init(int _width, int _height, Spins* _spins);
 
     public:
         SimulationCell(int _width, int _height, Spins* _spins);
-        SimulationCell(int _width, int _height, Spins* _spins, vector<int>& _A);
        
         Spins& GetSpins(){                     // get access to the spins  
             return *spins;
@@ -47,19 +44,11 @@ class SimulationCell{
             return nghbs;
         };
 
-        vector<pair<int,int>>& GetBoundary(){  // get the boundary connectivity
-            return boundary;
-        };
 
         void print();    // ugly but useful debugging routines
 };
 
-/****************************************************************************************************
- *
- ***************************************************************************************************/
-SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<int>& _A){
-    Init(_width, _height, _spins, _A);
-}
+
 
 /****************************************************************************************************
  *
@@ -67,7 +56,7 @@ SimulationCell::SimulationCell(int _width, int _height, Spins* _spins, vector<in
 SimulationCell::SimulationCell(int _width, int _height, Spins* _spins){
     vector<int> A;
     A.clear();
-    Init(_width, _height, _spins, A);
+    Init(_width, _height, _spins);
 }
 
 /****************************************************************************************************
@@ -75,7 +64,7 @@ SimulationCell::SimulationCell(int _width, int _height, Spins* _spins){
  * required to run cluster and normal spin updates on the simulation cell. The region A determines
  * the spins connectivity at the boundary between two replicas constituing the lattice.
  ***************************************************************************************************/
-void SimulationCell::Init(int _width, int _height, Spins* _spins, vector<int>& _A){
+void SimulationCell::Init(int _width, int _height, Spins* _spins){
 
     spins = _spins;
     
@@ -125,10 +114,6 @@ void SimulationCell::print(){
     }
     cout << endl;
     
-    cout << "   Boundary state: " << endl << "   ";
-    for (auto b=boundary.begin(); b!=boundary.end(); b++)
-        cout << "("<< b->first << ", " << b->second << ") ";
-    cout << endl;
 };
 
 

@@ -10,12 +10,12 @@ using namespace boost;
 
 /****************************************************************************************************
  ***************************************************************************************************/
-Communicator::Communicator(int _r, int _width, int _height, int _widthA, int _widthAp, float _T, long _p)
+Communicator::Communicator(int _width, int _height, float _T, long _p)
 {
     p = _p;
      
     // Build the filename 
-    dataName = str(format("%02d-%03d-%03d-%03d-%03d-t%06.3f") %_r %_width %_height %_widthA % _widthAp %_T);
+    dataName = str(format("%03d-%03d-t%06.3f") %_width %_height %_T);
     dataName +=str(format("-p%05d") %_p);
 
     types  = vector<string> {"estimator"};

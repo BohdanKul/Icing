@@ -17,7 +17,7 @@
 #include "simulationcell.h"
 #include "subroutines.h"
 #include "communicator.h"
-#include "clusterbuilder.h"
+#include "unitcell.h"
 
 using namespace std;
 namespace boo = boost;
@@ -45,10 +45,6 @@ int main(int argc, char *argv[]){
                                                   "ferromagnetic (+1) or antiferromagnetic (-1) coupling")
         ("width,  w",         po::value<int>(),   "lattice width")
         ("height, h",         po::value<int>(),   "lattice height")
-        ("A, A",              po::value<int>()->default_value(0),
-                                                   "region A widht")
-        ("Ap, P",             po::value<int>()->default_value(0),
-                                                   "region A prime width")
         ;
 
     po::options_description cmdLineOptions("Command line options");
@@ -134,9 +130,6 @@ int main(int argc, char *argv[]){
     int   N      = width * height;
     int   reps   = 1;
 
-    // Initialize random objects --------------------------------------------------------
-    vector<double> probTable = {1, exp(-4.0*beta), exp(-8.0*beta)};
-    
     //double Sum = 0;
     //for (auto pe=probTable.begin(); pe!=probTable.end(); pe++)
     //    Sum += *pe;
@@ -146,66 +139,53 @@ int main(int argc, char *argv[]){
     //    cout << *pe << endl;
     //}
 
+    const double PI = 3.141592653589793;    
     boo::mt19937 engine(seed);
     boo::uniform_int<uint64_t> UDInt(0, N-1); 
     boo::uniform_real<double>  UDReal(0,1);
-    boo::variate_generator<boo::mt19937&, boo::uniform_int<uint64_t> > RandInt( engine, UDInt );
-    boo::variate_generator<boo::mt19937&, boo::uniform_real<double> >   RandReal(engine, UDReal);
+    boo::uniform_real<double>  angleUDReal(-PI,PI);
+    boo::variate_generator<boo::mt19937&, boo::uniform_int<uint64_t> >  RandInt( engine,  UDInt );
+    boo::variate_generator<boo::mt19937&, boo::uniform_real<double> >   RandReal(engine,  UDReal);
+    boo::variate_generator<boo::mt19937&, boo::uniform_real<double> >   RandAngle(engine, angleUDReal);
     
     
     // Initialize a spins state ---------------------------------------------------------
     Spins spins;
     for (int i=0; i!=width*height; i++){
-        spins.Add((RandInt()%2)*2-1);
+        //spins.Add(RandAngle());
+        spins.Add(0);
     }
+    spins.Set(2, -3*PI);   
+    
     //spins.print();
 
     
-    // Initialize region A and A', dA = A - A' (A' is always assummed to be larger)
-    int A_size   = params["A"].as<int>();
-    int Ap_size = params["Ap"].as<int>();
-    vector<int> A;
-    vector<int> Ap;
-    vector<int> dA;
-    A.clear(); Ap.clear(); dA.clear();
-    for (auto i=0;      i!=A_size;  i++) A.push_back(i);
-    for (auto i=0;      i!=Ap_size; i++) Ap.push_back(i);
-    for (auto i=A_size; i!=Ap_size; i++) dA.push_back(i);
-   
+  
      
     // Initialize the main simulation cell corresponding to the region A --------------------
-    SimulationCell SC(width, height, &spins, A);
+    SimulationCell SC(width, height, &spins);
     //SC.print();
    
    
-    // Initialize the cluster builders -------------------
-    ClusterBuilder CB(SC, beta, signJ, RandReal); 
-    
-
     
     // Initialize file objects ----------------------------------------------------------
-    Communicator communicator(reps, width, height, A_size, Ap_size, T, seed);
+    Communicator communicator(width, height, T, seed);
     string eHeader = "";
-    eHeader += boo::str(boo::format("#%15s%16s%16s%16s%16s")%"e"%"e2"%"m"%"m2"%"|m|"); 
+    eHeader += boo::str(boo::format("#%15s%16s%16s%16s")%"e"%"e2"%"rho_x"%"rho_y"); 
     *communicator.stream("estimator")<< eHeader << endl; 
     long ID = communicator.getId();
 
 
     // Start the main MC loop -----------------------------------------------------------
     int initSpin;
-    int spinA; 
-    int EF;
     double debug = false;
-    long  ET; long E2T;           long _ET;
-    long  MT; long M2T; long aMT; long _MT;
-    double ZR;
-    double ZR2;
+    double  ET; double E2T; double _ET;
     double RN=0;
+    double prop_angle; double E1; double E2; double rho_x; double rho_y; double _rho_x; double _rho_y;
+    int ispin = 0; int next; int current; double angle1; double angle2;
+    double sum1; double sum2;
     for (auto i=0; i!=Nmeas; i++){
-        ET = 0; E2T = 0; 
-        MT = 0; M2T = 0; 
-       aMT = 0; 
-        ZR = 0; ZR2 = 0;  
+        ET = 0; E2T = 0; rho_y = 0; rho_x = 0; 
         for (auto j=0; j!=binSize; j++){
             if (debug) cout << "--- " << i << " " << j << endl;
             
@@ -213,60 +193,92 @@ int main(int argc, char *argv[]){
 
             // perform a Wolff cluster update
             
-            initSpin = RandInt() ; // pick randomly the initial spin
            
-            //CB.ResetPartition();
-            //CB.FlipTraceCluster(0, initSpin);
-            //int t=0;
-            //for (auto s=CB.GetPartition().begin(); s!=CB.GetPartition().end(); s++){
-            //    if (*s != -1)
-            //        SC.GetSpins().Flip(t);
-            //    t += 1;
-            //}
-
             if (debug){
                 cout << "    cluster is flipped " << endl; //<< Cluster << endl << "    ";
                 SC.GetSpins().print();
             }
+            
             // perform single spin updates
-            int ispin = 0;
             for (auto k=0; k!=SC.GetSize(); k++){
                 ispin = RandInt();
-                EF    = GetEffectiveField(SC, ispin);
-                spinA = SC.GetSpins().Get(ispin);
+                E1    = GetLocalEnergy(SC, ispin);
                 
+                prop_angle = SC.GetSpins().Get(ispin) + RandAngle()*(1.0-tanh(.2/T));
+                E2    = GetLocalEnergy(SC, ispin, prop_angle);
+
                 RN = RandReal();
-                if  (spinA*signJ*EF>0)
-                    SC.GetSpins().Flip(ispin);   
+                if  (E2<E1){
+                    SC.GetSpins().Set(ispin, prop_angle);   
+                }
                 else{
-                    if (RandReal() < probTable[(int) abs(EF)/2]) 
-                        SC.GetSpins().Flip(ispin);
+                    if (RandReal() < exp(-(E2-E1)/T)){ 
+                        SC.GetSpins().Set(ispin, prop_angle);   
                     }
+                }
             }
 
             // Perform measurements --------------------------------------------------------
-            GetEnergyMagnetization(SC, _ET, _MT);
+            _rho_y = 0; 
+            for (auto x=0; x!=width; x++){
+               sum1 = 0; sum2 = 0;
+               current = x;
+               next    = SC.GetLattice().at(x).at(DMap.at('u'));
+               while (next!=x){
+                     angle1 = SC.GetSpins().Get(current);
+                     angle2 = SC.GetSpins().Get(next);
+                     
+                     sum1 += cos(angle1 - angle2);
+                     sum2 += sin(angle1 - angle2);
+                    
+                     current = next;
+                     next    = SC.GetLattice().at(next).at(DMap.at('u'));
+               }
+               angle1 = SC.GetSpins().Get(current);
+               angle2 = SC.GetSpins().Get(next);
+               
+               sum1 += cos(angle1 - angle2);
+               sum2 += sin(angle1 - angle2);
+                
+               _rho_y += sum1 - sum2*sum2/T; 
+            }
+            rho_y += _rho_y;
+
+            _rho_x = 0; 
+            for (auto y=0; y!=height; y++){
+               sum1 = 0; sum2 = 0;
+               current = y*width;
+               next    = SC.GetLattice().at(y*width).at(DMap.at('r'));
+               while (next!=y*width){
+                     angle1 = SC.GetSpins().Get(current);
+                     angle2 = SC.GetSpins().Get(next);
+                     
+                     sum1 += cos(angle1 - angle2);
+                     sum2 += sin(angle1 - angle2);
+                    
+                     current = next;
+                     next    = SC.GetLattice().at(next).at(DMap.at('r'));
+               }
+               angle1 = SC.GetSpins().Get(current);
+               angle2 = SC.GetSpins().Get(next);
+               
+               sum1 += cos(angle1 - angle2);
+               sum2 += sin(angle1 - angle2);
+                
+               _rho_x += sum1 - sum2*sum2/T; 
+            }
+            rho_x += _rho_x;
+
+            _ET = GetEnergy(SC);
             ET  += _ET;
             E2T += _ET*_ET;
 
-            MT  += _MT;
-            M2T += _MT*_MT;
-            aMT += labs(_MT);
-
-            //cout << " Magnetization: " << _MT << " cumulative: " << MT << endl;
-            //for (auto k=0; k!=SC.GetSize(); k++){
-            //     cout << SC.GetSpins().Get(k) << " ";
-            //}
-            //cout << endl;
-
-
         }
         
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(signJ*ET / ( 1.0*binSize*N   )));
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(     E2T / ( 1.0*binSize*N*N )));
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(      MT / ( 1.0*binSize*N   )));
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(     M2T / ( 1.0*binSize*N*N )));
-        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(     aMT / ( 1.0*binSize*N   )));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ET / ( 1.0*binSize*N   )));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(E2T/ ( 1.0*binSize*N*N )));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(rho_x / ( 1.0*binSize*N   )));
+        *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(rho_y/ ( 1.0*binSize*N )));
         *communicator.stream("estimator") << endl;    
         
         cout << ID << ": Measurement taken" << endl;
