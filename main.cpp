@@ -153,20 +153,20 @@ int main(int argc, char *argv[]){
     Spins spins;
     for (int i=0; i!=width*height; i++){
         //spins.Add(RandAngle());
-        spins.Add(0);
+        spins.Add(0.1143431341);
     }
-    spins.Set(2, -3*PI);   
-    
-    //spins.print();
+    //spins.Set(118, 0.123777);   
 
+    //spins.print();
     
   
      
     // Initialize the main simulation cell corresponding to the region A --------------------
     SimulationCell SC(width, height, &spins);
     //SC.print();
+    GetEnergy(SC);
    
-   
+    
     
     // Initialize file objects ----------------------------------------------------------
     Communicator communicator(width, height, T, seed);
@@ -184,6 +184,7 @@ int main(int argc, char *argv[]){
     double prop_angle; double E1; double E2; double rho_x; double rho_y; double _rho_x; double _rho_y;
     int ispin = 0; int next; int current; double angle1; double angle2;
     double sum1; double sum2;
+    double EF1; double EF2; double tangle;
     for (auto i=0; i!=Nmeas; i++){
         ET = 0; E2T = 0; rho_y = 0; rho_x = 0; 
         for (auto j=0; j!=binSize; j++){
@@ -202,18 +203,42 @@ int main(int argc, char *argv[]){
             // perform single spin updates
             for (auto k=0; k!=SC.GetSize(); k++){
                 ispin = RandInt();
-                E1    = GetLocalEnergy(SC, ispin);
+                E1     = GetLocalEnergy1(SC, ispin);
+                //EF1    = GetEnergy(SC);
                 
-                prop_angle = SC.GetSpins().Get(ispin) + RandAngle()*(1.0-tanh(.2/T));
-                E2    = GetLocalEnergy(SC, ispin, prop_angle);
 
-                RN = RandReal();
+                prop_angle = SC.GetSpins().Get(ispin) + RandAngle()*(1.0-tanh(.2/T));
+                //cout << N<< endl;
+                E2    = GetLocalEnergy2(SC, ispin, prop_angle);
+
                 if  (E2<E1){
+                    tangle = SC.GetSpins().Get(ispin);
                     SC.GetSpins().Set(ispin, prop_angle);   
+                    //EF2    = GetEnergy(SC);
+                    //if (fabs((EF2-EF1) -(E2-E1))>0.00000001){
+                    //    cout << EF2-EF1 << " " << E2 - E1  << endl;
+                    //    cout << " Previous angle: :" << SC.GetSpins().Get(ispin)<< endl;
+                    //    cout << " Proposed angle: :" << prop_angle<< endl;
+                    //    cout << " Site:           :" << ispin << endl;
+                    //    cout << "E_full 1 : " << EF1 << " "<< "E_full 2 : " << EF2 << endl;
+                    //    cout << "1" << endl;
+                    //}
                 }
                 else{
                     if (RandReal() < exp(-(E2-E1)/T)){ 
+                        tangle = SC.GetSpins().Get(ispin);
                         SC.GetSpins().Set(ispin, prop_angle);   
+                        //EF2    = GetEnergy(SC);
+                        //if (fabs((EF2-EF1) -(E2-E1))>0.00000001){
+                        //    cout << EF2-EF1 << " " << E2 - E1  << endl;
+                        //    cout << " Previous angle: :" << tangle << endl;
+                        //    cout << " Proposed angle: :" << prop_angle<< endl;
+                        //    cout << " Site:           :" << ispin << endl;
+                        //    cout << "E_full 1 : " << EF1 << " "<< "E_full 2 : " << EF2 << endl;
+                        //    cout << "2" << endl;
+
+                        //}
+                        //break;
                     }
                 }
             }
@@ -269,12 +294,13 @@ int main(int argc, char *argv[]){
             }
             rho_x += _rho_x;
 
-            _ET = GetEnergy(SC);
+           _ET = GetEnergy(SC);
             ET  += _ET;
             E2T += _ET*_ET;
 
         }
         
+        //SC.GetSpins().print();
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(ET / ( 1.0*binSize*N   )));
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(E2T/ ( 1.0*binSize*N*N )));
         *communicator.stream("estimator") << boo::str(boo::format("%16.8E") %(rho_x / ( 1.0*binSize*N   )));

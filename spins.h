@@ -37,10 +37,6 @@ class Spins{
             N += 1;
         };
 
-        void Flip(int index){          // flip the spin at index
-            state[index] = -state[index];
-        };
-
         // ugly but useful debugging routines
         void print(){
             cout << "--- Spins state ---" << endl << "   ";
