@@ -368,11 +368,11 @@ int main(int argc, char *argv[]){
             *communicator.stream("state") << SC.GetSpins().Get(k) << " ";
         *communicator.stream("state") << endl;    
     
-        for (auto l=0; l!=2; l++){
-            for (auto k=0; k!=N; k++)
-                *communicator.stream("spins") << (SC.GetSpins().Get(l*N + k)+1)/2 << " ";
-            *communicator.stream("spins") << endl;
-        }
+        //for (auto l=0; l!=2; l++){
+        //    for (auto k=0; k!=N; k++)
+        //        *communicator.stream("spins") << (SC.GetSpins().Get(l*N + k)+1)/2 << " ";
+        //    *communicator.stream("spins") << endl;
+        //}
 
         cout << ID << ": Measurement taken" << endl;
     }
